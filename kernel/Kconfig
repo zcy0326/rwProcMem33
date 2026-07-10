@@ -1,0 +1,6 @@
+config KFI
+	tristate "Kernel-assisted instrumentation interface"
+	depends on PID_NS
+	help
+	  Build the KFI character device and its versioned userspace ABI.
+	  Access is restricted to callers with CAP_SYS_PTRACE.
