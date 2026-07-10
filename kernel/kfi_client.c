@@ -10,6 +10,7 @@
 #include <linux/uaccess.h>
 
 #include "kfi_internal.h"
+#include "kfi_transport.h"
 
 static atomic64_t kfi_next_client_id = ATOMIC64_INIT(0);
 
@@ -40,7 +41,8 @@ static bool kfi_client_authorized(const struct kfi_client *client)
 	       capable(CAP_SYS_PTRACE);
 }
 
-int kfi_client_open(struct inode *inode, struct file *file)
+int kfi_client_create(struct file *file,
+		      enum kfi_transport_kind transport)
 {
 	struct kfi_client *client;
 
@@ -55,21 +57,21 @@ int kfi_client_open(struct inode *inode, struct file *file)
 	client->owner_euid = current_euid();
 	client->opener_pid = task_pid_nr(current);
 	client->opener_tgid = task_tgid_nr(current);
+	client->transport = transport;
 	mutex_init(&client->lock);
 	idr_init(&client->sessions);
 	file->private_data = client;
-
-	return nonseekable_open(inode, file);
+	return 0;
 }
 
-int kfi_client_release(struct inode *inode, struct file *file)
+void kfi_client_destroy(struct file *file)
 {
 	struct kfi_client *client = file->private_data;
 	struct kfi_session *session;
 	int id;
 
 	if (!client)
-		return 0;
+		return;
 
 	mutex_lock(&client->lock);
 	idr_for_each_entry(&client->sessions, session, id)
@@ -79,7 +81,6 @@ int kfi_client_release(struct inode *inode, struct file *file)
 
 	file->private_data = NULL;
 	kfree(client);
-	return 0;
 }
 
 static long kfi_get_version(struct kfi_client *client, unsigned long arg)
@@ -103,7 +104,8 @@ static long kfi_get_caps(unsigned long arg)
 {
 	struct kfi_caps caps = {
 		.flags = KFI_CAP_CLIENT_ISOLATION | KFI_CAP_OPAQUE_SESSIONS |
-			 KFI_CAP_RUNTIME_INFO,
+			 KFI_CAP_RUNTIME_INFO |
+			 kfi_transport_capabilities(),
 		.max_sessions = KFI_MAX_SESSIONS,
 		.max_io_size = KFI_MAX_IO_SIZE,
 	};
@@ -218,10 +220,9 @@ static long kfi_close_session(struct kfi_client *client, unsigned long arg)
 	return 0;
 }
 
-long kfi_client_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+long kfi_dispatch_ioctl(struct kfi_client *client, unsigned int cmd,
+			unsigned long arg)
 {
-	struct kfi_client *client = file->private_data;
-
 	if (!client)
 		return -ENODEV;
 	if (_IOC_TYPE(cmd) != KFI_IOC_MAGIC)

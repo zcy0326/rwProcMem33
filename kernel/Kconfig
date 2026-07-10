@@ -2,5 +2,23 @@ config KFI
 	tristate "Kernel-assisted instrumentation interface"
 	depends on PID_NS
 	help
-	  Build the KFI character device and its versioned userspace ABI.
+	  Build the KFI kernel backend and its versioned userspace ABI.
 	  Access is restricted to callers with CAP_SYS_PTRACE.
+
+if KFI
+
+config KFI_TRANSPORT_CHAR
+	bool "KFI character-device transport"
+	default y
+	help
+	  Register the standard /dev/kfi transport.
+
+config KFI_TRANSPORT_PROC_PRIVATE
+	bool "KFI private procfs transport"
+	default n
+	depends on PROC_FS
+	help
+	  Register a build-specific, mode 0600 procfs endpoint. This transport
+	  is a normal visible procfs entry and does not alter directory listing.
+
+endif

@@ -21,12 +21,21 @@ void checked_ioctl(int fd, unsigned long request, void *argument,
 
 } // namespace
 
-Client::Client(const std::string &path)
+Client::Client() : Client(Endpoint::Auto())
 {
-	fd_ = ::open(path.c_str(), O_RDWR | O_CLOEXEC);
+}
+
+Client::Client(const std::string &device_path)
+	: Client(Endpoint::Device(device_path))
+{
+}
+
+Client::Client(const Endpoint &endpoint) : endpoint_(endpoint.resolve())
+{
+	fd_ = ::open(endpoint_.path.c_str(), O_RDWR | O_CLOEXEC);
 	if (fd_ == -1)
 		throw std::system_error(errno, std::generic_category(),
-					"open " + path);
+					"open " + endpoint_.path);
 }
 
 Client::~Client()
@@ -35,7 +44,9 @@ Client::~Client()
 		::close(fd_);
 }
 
-Client::Client(Client &&other) noexcept : fd_(std::exchange(other.fd_, -1))
+Client::Client(Client &&other) noexcept
+	: fd_(std::exchange(other.fd_, -1)),
+	  endpoint_(std::move(other.endpoint_))
 {
 }
 
@@ -46,6 +57,7 @@ Client &Client::operator=(Client &&other) noexcept
 	if (fd_ != -1)
 		::close(fd_);
 	fd_ = std::exchange(other.fd_, -1);
+	endpoint_ = std::move(other.endpoint_);
 	return *this;
 }
 
@@ -86,6 +98,11 @@ void Client::close_session(std::uint64_t session_id) const
 	request.session_id = session_id;
 	checked_ioctl(fd_, KFI_IOC_CLOSE_SESSION, &request,
 		      "KFI_IOC_CLOSE_SESSION");
+}
+
+const ResolvedEndpoint &Client::endpoint() const noexcept
+{
+	return endpoint_;
 }
 
 } // namespace kfi

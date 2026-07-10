@@ -1,5 +1,7 @@
 /build/
 /dist/
+/kernel/generated/kfi_private_config.h
+/build/generated/
 __pycache__/
 *.ko
 *.mod

@@ -1,4 +1,6 @@
 KFI_PROFILE ?= generic
+KFI_TRANSPORT_CHAR ?= y
+KFI_TRANSPORT_PROC_PRIVATE ?= n
 
 ifeq ($(KFI_PROFILE),generic)
 ccflags-y += -DKFI_PROFILE_GENERIC
@@ -18,6 +20,23 @@ endif
 
 obj-m += kfi.o
 kfi-y := kfi_main.o kfi_client.o kfi_compat.o kfi_runtime.o \
-	 kfi_selftest.o
+	 kfi_selftest.o kfi_transport.o
+
+ifeq ($(KFI_TRANSPORT_CHAR),y)
+ccflags-y += -DKFI_ENABLE_TRANSPORT_CHAR
+kfi-y += kfi_transport_char.o
+endif
+
+ifeq ($(KFI_TRANSPORT_PROC_PRIVATE),y)
+ifeq ($(wildcard $(src)/generated/kfi_private_config.h),)
+$(error Run scripts/gen_private_config.py before enabling the private proc transport)
+endif
+ccflags-y += -DKFI_ENABLE_TRANSPORT_PROC_PRIVATE
+kfi-y += kfi_transport_proc.o
+endif
+
+ifeq ($(KFI_TRANSPORT_CHAR)$(KFI_TRANSPORT_PROC_PRIVATE),nn)
+$(error At least one KFI transport must be enabled)
+endif
 
 ccflags-y += -I$(src)/../include/uapi

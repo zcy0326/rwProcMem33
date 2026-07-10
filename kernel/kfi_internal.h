@@ -3,7 +3,6 @@
 #define KFI_INTERNAL_H
 
 #include <linux/build_bug.h>
-#include <linux/cdev.h>
 #include <linux/idr.h>
 #include <linux/mutex.h>
 #include <linux/pid.h>
@@ -11,6 +10,7 @@
 
 #include "../include/uapi/linux/kfi.h"
 #include "profiles/kfi_profile.h"
+#include "kfi_transport.h"
 
 #define KFI_MODULE_VERSION 0x00010100U
 #define KFI_MAX_SESSIONS 4096U
@@ -27,14 +27,17 @@ struct kfi_client {
 	kuid_t owner_euid;
 	pid_t opener_pid;
 	pid_t opener_tgid;
+	enum kfi_transport_kind transport;
 	struct mutex lock;
 	struct idr sessions;
 	u32 session_generation;
 };
 
-int kfi_client_open(struct inode *inode, struct file *file);
-int kfi_client_release(struct inode *inode, struct file *file);
-long kfi_client_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+int kfi_client_create(struct file *file,
+		      enum kfi_transport_kind transport);
+void kfi_client_destroy(struct file *file);
+long kfi_dispatch_ioctl(struct kfi_client *client, unsigned int cmd,
+			unsigned long arg);
 void kfi_runtime_get(struct kfi_runtime_info *info);
 int kfi_selftest_run(void);
 

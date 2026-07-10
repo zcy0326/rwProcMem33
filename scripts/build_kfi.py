@@ -57,6 +57,8 @@ def main() -> int:
     parser.add_argument("--no-llvm", action="store_true")
     parser.add_argument("--skip-verify", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--proc-private", action="store_true")
+    parser.add_argument("--no-char", action="store_true")
     args = parser.parse_args()
 
     try:
@@ -68,6 +70,13 @@ def main() -> int:
             raise ValueError(f"kernel build directory does not exist: {kernel_out}")
         if args.jobs <= 0:
             raise ValueError("--jobs must be positive")
+        if args.no_char and not args.proc_private:
+            raise ValueError("at least one transport must be enabled")
+        private_header = (
+            repository / "kernel" / "generated" / "kfi_private_config.h"
+        )
+        if args.proc_private and not private_header.is_file():
+            raise ValueError("generate kfi_private_config.h before enabling proc")
 
         command = [
             args.make,
@@ -76,6 +85,8 @@ def main() -> int:
             f"M={repository / 'kernel'}",
             f"ARCH={args.arch}",
             f"KFI_PROFILE={profile}",
+            f"KFI_TRANSPORT_CHAR={'n' if args.no_char else 'y'}",
+            f"KFI_TRANSPORT_PROC_PRIVATE={'y' if args.proc_private else 'n'}",
             f"-j{args.jobs}",
         ]
         if not args.no_llvm:

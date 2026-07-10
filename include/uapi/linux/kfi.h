@@ -22,6 +22,8 @@
 #define KFI_CAP_MODIFY_REGS      (1ULL << 8)
 #define KFI_CAP_POLL_EVENTS      (1ULL << 9)
 #define KFI_CAP_RUNTIME_INFO     (1ULL << 10)
+#define KFI_CAP_TRANSPORT_CHAR   (1ULL << 11)
+#define KFI_CAP_TRANSPORT_PROC_PRIVATE (1ULL << 12)
 
 #define KFI_RUNTIME_COMPAT        (1ULL << 0)
 #define KFI_RUNTIME_MODVERSIONS   (1ULL << 1)
@@ -30,6 +32,8 @@
 #define KFI_RUNTIME_LTO_CLANG     (1ULL << 4)
 #define KFI_RUNTIME_KPROBES       (1ULL << 5)
 #define KFI_RUNTIME_HW_BREAKPOINT (1ULL << 6)
+#define KFI_RUNTIME_TRANSPORT_CHAR (1ULL << 7)
+#define KFI_RUNTIME_TRANSPORT_PROC_PRIVATE (1ULL << 8)
 
 struct kfi_version {
 	__u16 major;

@@ -42,6 +42,25 @@ adb shell su -c 'major=$(awk '\''$2 == "kfi" { print $1 }'\'' /proc/devices); te
 Production images should use a stable ueventd rule and a dedicated SELinux
 domain for the daemon. Do not make the node world-accessible.
 
+### Optional private procfs endpoint
+
+Generate its build-specific configuration before building:
+
+```sh
+python3 scripts/gen_private_config.py \
+  --output kernel/generated/kfi_private_config.h \
+  --user-config build/generated/kfi_endpoint.json
+make -C "$KERNEL_OUT" M="$PWD/kernel" ARCH=arm64 LLVM=1 \
+  KFI_TRANSPORT_CHAR=y KFI_TRANSPORT_PROC_PRIVATE=y modules
+```
+
+The endpoint is a normal mode-0600 procfs node. Pass the generated JSON's
+`endpoint` value explicitly or through `KFI_ENDPOINT`:
+
+```sh
+KFI_ENDPOINT=proc:/proc/name/name /data/local/tmp/kfi version
+```
+
 ## 4. Smoke test
 
 ```sh

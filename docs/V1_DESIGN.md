@@ -6,7 +6,8 @@ hardware-breakpoint code out of the two upstream modules.
 
 ## Trust and ownership model
 
-- Opening `/dev/kfi` requires `CAP_SYS_PTRACE`.
+- Opening `/dev/kfi` or the optional private procfs endpoint requires
+  `CAP_SYS_PTRACE`.
 - Every successful `open()` allocates an independent `kfi_client`.
 - Sessions are stored in that client's IDR and represented in userspace by an
   integer ID. Kernel pointers never cross the ABI.
@@ -22,7 +23,11 @@ hardware-breakpoint code out of the two upstream modules.
 - Central compatibility wrappers for version-sensitive kernel APIs and compat
   ioctl argument conversion.
 - `OPEN_PROCESS` and `CLOSE_SESSION` with opaque, per-client handles.
-- C++17 userspace library and CLI commands: `version`, `caps`, `runtime`, `attach`.
+- A shared transport layer and dispatcher with a default character device and
+  a default-off, build-specific procfs endpoint.
+- C++17 endpoint abstraction and CLI selection through `--endpoint` and
+  `KFI_ENDPOINT`.
+- CLI commands: `endpoint-info`, `version`, `caps`, `runtime`, and `attach`.
 - Device probe, module verifier, portability documentation, and ARM64 CLI CI.
 
 Capability bits are only advertised after their implementation is wired into
@@ -39,8 +44,10 @@ through the KFI ABI.
 
 ## Next slices
 
-1. Add session lookup/refcount helpers and bounded memory I/O.
-2. Add maps and thread enumeration.
-3. Replace global breakpoint storage with client-owned opaque IDs.
-4. Add a preallocated event ring and `poll()` support.
-5. Add per-breakpoint actions after event delivery is stable.
+1. Add authentication state to the shared client when the authentication
+   protocol is finalized.
+2. Add session lookup/refcount helpers and bounded memory I/O.
+3. Add maps and thread enumeration.
+4. Replace global breakpoint storage with client-owned opaque IDs.
+5. Add a preallocated event ring and activate `read()`/`poll()`.
+6. Add per-breakpoint actions after event delivery is stable.

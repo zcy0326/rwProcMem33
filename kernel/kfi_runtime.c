@@ -31,6 +31,12 @@ static u64 kfi_runtime_build_flags(void)
 #ifdef CONFIG_HAVE_HW_BREAKPOINT
 	flags |= KFI_RUNTIME_HW_BREAKPOINT;
 #endif
+#ifdef KFI_ENABLE_TRANSPORT_CHAR
+	flags |= KFI_RUNTIME_TRANSPORT_CHAR;
+#endif
+#ifdef KFI_ENABLE_TRANSPORT_PROC_PRIVATE
+	flags |= KFI_RUNTIME_TRANSPORT_PROC_PRIVATE;
+#endif
 
 	return flags;
 }

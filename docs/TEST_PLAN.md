@@ -16,6 +16,12 @@ available.
 11. Nonzero request reserved fields and unknown flags return `EINVAL`.
 12. `kfi runtime` matches the target release, machine, page size, and profile.
 13. A 32-bit compat client receives the same fixed-width UAPI layouts.
-14. `verify_module.py` rejects wrong-machine, wrong-ABI, missing-vermagic, and
+14. Character and proc endpoints return identical version, capability, runtime,
+    session, and error behavior.
+15. The proc endpoint has mode `0600`, supports multiple independent opens, and
+    is removed cleanly on unload.
+16. A failed optional transport registration does not disable a successfully
+    registered transport, and `GET_CAPS` reports only active transports.
+17. `verify_module.py` rejects wrong-machine, wrong-ABI, missing-vermagic, and
     denied-symbol artifacts.
-15. Probe/load/ioctl/unload succeeds on every supported KMI build target.
+18. Probe/load/ioctl/unload succeeds on every supported KMI build target.

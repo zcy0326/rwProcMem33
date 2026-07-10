@@ -5,7 +5,8 @@ fixed-size and include reserved fields that callers must set to zero.
 
 ## Negotiation
 
-Clients open `/dev/kfi`, then call:
+Clients open either `/dev/kfi` or a configured private procfs endpoint, then
+call:
 
 1. `KFI_IOC_GET_VERSION`
 2. `KFI_IOC_GET_CAPS`
@@ -18,6 +19,14 @@ using optional commands.
 The kernel and C++ SDK assert these layouts at compile time: `kfi_version` 56
 bytes, `kfi_caps` 64 bytes, `kfi_open_process` 40 bytes,
 `kfi_close_session` 32 bytes, and `kfi_runtime_info` 176 bytes.
+
+## Transport capabilities
+
+`KFI_CAP_TRANSPORT_CHAR` and `KFI_CAP_TRANSPORT_PROC_PRIVATE` report transports
+that registered successfully for the running module. Runtime build flags report
+which transports were compiled. The two values may differ when an optional
+transport fails during initialization. Both endpoints use the same ioctl
+numbers and structure layouts.
 
 ## Session lifecycle
 

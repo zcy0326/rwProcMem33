@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <string>
 
+#include "kfi/endpoint.hpp"
+
 #include <linux/kfi.h>
 
 namespace kfi {
@@ -17,7 +19,9 @@ static_assert(sizeof(kfi_runtime_info) == 176, "unexpected runtime layout");
 
 class Client final {
 public:
-	explicit Client(const std::string &path = KFI_DEVICE_PATH);
+	Client();
+	explicit Client(const Endpoint &endpoint);
+	explicit Client(const std::string &device_path);
 	~Client();
 
 	Client(const Client &) = delete;
@@ -31,8 +35,11 @@ public:
 	std::uint64_t open_process(std::int32_t pid) const;
 	void close_session(std::uint64_t session_id) const;
 
+	const ResolvedEndpoint &endpoint() const noexcept;
+
 private:
 	int fd_ = -1;
+	ResolvedEndpoint endpoint_{EndpointKind::Device, {}, {}};
 };
 
 } // namespace kfi

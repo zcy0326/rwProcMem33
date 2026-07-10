@@ -13,9 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m py_compile scripts/verify_module.py
+      - run: python3 -m py_compile scripts/gen_private_config.py
       - run: python3 -m unittest discover -s tests/tools -p 'test_*.py'
       - run: cmake -S user -B build/user -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build/user --parallel
+      - run: ctest --test-dir build/user --output-on-failure
 
   kernel-module:
     runs-on: ubuntu-latest
@@ -25,9 +27,14 @@ jobs:
       - run: sudo apt-get install -y kmod linux-headers-generic
       - name: Build external module
         run: |
+          python3 scripts/gen_private_config.py \
+            --output kernel/generated/kfi_private_config.h \
+            --name kfi_ci_endpoint \
+            --instance-id github-actions
           kernel_dir=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' | sort -V | tail -n1)
           test -n "$kernel_dir"
-          make -C "$kernel_dir" M="$PWD/kernel" modules
+          make -C "$kernel_dir" M="$PWD/kernel" \
+            KFI_TRANSPORT_CHAR=y KFI_TRANSPORT_PROC_PRIVATE=y modules
       - name: Verify external module
         run: python3 scripts/verify_module.py kernel/kfi.ko --expected-machine X86-64
 
