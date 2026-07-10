@@ -2,6 +2,7 @@
 #ifndef KFI_INTERNAL_H
 #define KFI_INTERNAL_H
 
+#include <linux/build_bug.h>
 #include <linux/cdev.h>
 #include <linux/idr.h>
 #include <linux/mutex.h>
@@ -9,8 +10,9 @@
 #include <linux/types.h>
 
 #include "../include/uapi/linux/kfi.h"
+#include "profiles/kfi_profile.h"
 
-#define KFI_MODULE_VERSION 0x00010000U
+#define KFI_MODULE_VERSION 0x00010100U
 #define KFI_MAX_SESSIONS 4096U
 #define KFI_MAX_IO_SIZE (1024U * 1024U)
 
@@ -33,5 +35,13 @@ struct kfi_client {
 int kfi_client_open(struct inode *inode, struct file *file);
 int kfi_client_release(struct inode *inode, struct file *file);
 long kfi_client_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+void kfi_runtime_get(struct kfi_runtime_info *info);
+int kfi_selftest_run(void);
+
+static_assert(sizeof(struct kfi_version) == 56);
+static_assert(sizeof(struct kfi_caps) == 64);
+static_assert(sizeof(struct kfi_open_process) == 40);
+static_assert(sizeof(struct kfi_close_session) == 32);
+static_assert(sizeof(struct kfi_runtime_info) == 176);
 
 #endif

@@ -16,10 +16,14 @@ hardware-breakpoint code out of the two upstream modules.
 
 ## Implemented slice
 
-- Versioned UAPI 1.0.
+- Versioned UAPI 1.1 with compile-time layout assertions.
 - `GET_VERSION` and accurate capability negotiation.
+- `GET_RUNTIME_INFO` for release, machine, page size, profile, and build flags.
+- Central compatibility wrappers for version-sensitive kernel APIs and compat
+  ioctl argument conversion.
 - `OPEN_PROCESS` and `CLOSE_SESSION` with opaque, per-client handles.
-- C++17 userspace library and CLI commands: `version`, `caps`, `attach`.
+- C++17 userspace library and CLI commands: `version`, `caps`, `runtime`, `attach`.
+- Device probe, module verifier, portability documentation, and ARM64 CLI CI.
 
 Capability bits are only advertised after their implementation is wired into
 the unified module. This prevents a new userspace client from accidentally

@@ -3,7 +3,7 @@
 #include <linux/cred.h>
 #include <linux/errno.h>
 #include <linux/fs.h>
-#include <linux/limits.h>
+#include <linux/kernel.h>
 #include <linux/pid.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
@@ -12,6 +12,18 @@
 #include "kfi_internal.h"
 
 static atomic64_t kfi_next_client_id = ATOMIC64_INIT(0);
+
+static bool kfi_reserved_is_zero(const __u64 *values, size_t count)
+{
+	size_t i;
+
+	for (i = 0; i < count; i++) {
+		if (values[i])
+			return false;
+	}
+
+	return true;
+}
 
 static void kfi_session_destroy(struct kfi_session *session)
 {
@@ -90,12 +102,24 @@ static long kfi_get_version(struct kfi_client *client, unsigned long arg)
 static long kfi_get_caps(unsigned long arg)
 {
 	struct kfi_caps caps = {
-		.flags = KFI_CAP_CLIENT_ISOLATION | KFI_CAP_OPAQUE_SESSIONS,
+		.flags = KFI_CAP_CLIENT_ISOLATION | KFI_CAP_OPAQUE_SESSIONS |
+			 KFI_CAP_RUNTIME_INFO,
 		.max_sessions = KFI_MAX_SESSIONS,
 		.max_io_size = KFI_MAX_IO_SIZE,
 	};
 
 	if (copy_to_user((void __user *)arg, &caps, sizeof(caps)))
+		return -EFAULT;
+
+	return 0;
+}
+
+static long kfi_get_runtime_info(unsigned long arg)
+{
+	struct kfi_runtime_info info;
+
+	kfi_runtime_get(&info);
+	if (copy_to_user((void __user *)arg, &info, sizeof(info)))
 		return -EFAULT;
 
 	return 0;
@@ -112,7 +136,9 @@ static long kfi_open_process(struct kfi_client *client, unsigned long arg)
 
 	if (copy_from_user(&request, (void __user *)arg, sizeof(request)))
 		return -EFAULT;
-	if (request.pid <= 0 || request.flags || request.session_id)
+	if (request.pid <= 0 || request.flags || request.session_id ||
+	    !kfi_reserved_is_zero(request.reserved,
+				  ARRAY_SIZE(request.reserved)))
 		return -EINVAL;
 
 	pid = find_get_pid(request.pid);
@@ -174,7 +200,9 @@ static long kfi_close_session(struct kfi_client *client, unsigned long arg)
 	if (copy_from_user(&request, (void __user *)arg, sizeof(request)))
 		return -EFAULT;
 	slot = (u32)request.session_id;
-	if (!request.session_id || !slot || slot > KFI_MAX_SESSIONS)
+	if (!request.session_id || !slot || slot > KFI_MAX_SESSIONS ||
+	    !kfi_reserved_is_zero(request.reserved,
+				  ARRAY_SIZE(request.reserved)))
 		return -EINVAL;
 
 	mutex_lock(&client->lock);
@@ -206,6 +234,8 @@ long kfi_client_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		return kfi_get_version(client, arg);
 	case KFI_IOC_GET_CAPS:
 		return kfi_get_caps(arg);
+	case KFI_IOC_GET_RUNTIME_INFO:
+		return kfi_get_runtime_info(arg);
 	case KFI_IOC_OPEN_PROCESS:
 		return kfi_open_process(client, arg);
 	case KFI_IOC_CLOSE_SESSION:

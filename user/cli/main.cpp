@@ -22,7 +22,7 @@ std::int32_t parse_pid(std::string_view text)
 
 void usage(const char *program)
 {
-	std::cerr << "usage: " << program << " <version|caps|attach PID>\n";
+	std::cerr << "usage: " << program << " <version|caps|runtime|attach PID>\n";
 }
 
 } // namespace
@@ -51,6 +51,17 @@ int main(int argc, char **argv)
 			std::cout << "flags=0x" << std::hex << caps.flags << std::dec
 				  << " max_sessions=" << caps.max_sessions
 				  << " max_io_size=" << caps.max_io_size << '\n';
+			return 0;
+		}
+
+		if (command == "runtime" && argc == 2) {
+			const auto info = client.runtime_info();
+			std::cout << "release=" << info.release
+				  << " machine=" << info.machine
+				  << " page_size=" << info.page_size
+				  << " page_shift=" << info.page_shift
+				  << " build_flags=0x" << std::hex << info.build_flags
+				  << std::dec << " profile=" << info.profile << '\n';
 			return 0;
 		}
 

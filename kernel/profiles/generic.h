@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+#ifndef KFI_PROFILE_GENERIC_H
+#define KFI_PROFILE_GENERIC_H
+
+#define KFI_PROFILE_NAME "generic"
+#define KFI_PROFILE_LINUX_MAJOR 0
+#define KFI_PROFILE_LINUX_MINOR 0
+#define KFI_PROFILE_ENFORCE_VERSION 0
+
+#endif

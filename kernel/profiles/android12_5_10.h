@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+#ifndef KFI_PROFILE_ANDROID12_5_10_H
+#define KFI_PROFILE_ANDROID12_5_10_H
+
+#define KFI_PROFILE_NAME "android12-5.10"
+#define KFI_PROFILE_LINUX_MAJOR 5
+#define KFI_PROFILE_LINUX_MINOR 10
+#define KFI_PROFILE_ENFORCE_VERSION 1
+
+#endif

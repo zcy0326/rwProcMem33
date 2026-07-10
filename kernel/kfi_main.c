@@ -4,11 +4,8 @@
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/version.h>
-#ifdef CONFIG_COMPAT
-#include <linux/compat.h>
-#endif
 
+#include "kfi_compat.h"
 #include "kfi_internal.h"
 
 static dev_t kfi_dev;
@@ -22,7 +19,7 @@ static const struct file_operations kfi_fops = {
 	.release = kfi_client_release,
 	.unlocked_ioctl = kfi_client_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl = compat_ptr_ioctl,
+	.compat_ioctl = kfi_compat_ioctl,
 #endif
 	.llseek = no_llseek,
 };
@@ -30,6 +27,12 @@ static const struct file_operations kfi_fops = {
 static int __init kfi_init(void)
 {
 	int error;
+
+	error = kfi_selftest_run();
+	if (error) {
+		pr_err("kfi: selftest failed: %d\n", error);
+		return error;
+	}
 
 	error = alloc_chrdev_region(&kfi_dev, 0, 1, KFI_DEVICE_NAME);
 	if (error)
@@ -41,11 +44,7 @@ static int __init kfi_init(void)
 	if (error)
 		goto unregister_region;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
-	kfi_class = class_create(KFI_DEVICE_NAME);
-#else
-	kfi_class = class_create(THIS_MODULE, KFI_DEVICE_NAME);
-#endif
+	kfi_class = kfi_compat_class_create(KFI_DEVICE_NAME);
 	if (IS_ERR(kfi_class)) {
 		error = PTR_ERR(kfi_class);
 		goto delete_cdev;
@@ -86,4 +85,5 @@ module_exit(kfi_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("KFI contributors");
 MODULE_DESCRIPTION("Kernel-assisted instrumentation interface");
-MODULE_VERSION("1.0.0");
+MODULE_VERSION("1.1.0");
+MODULE_INFO(kfi_abi, "1.1");

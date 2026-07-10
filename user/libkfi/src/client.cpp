@@ -63,6 +63,14 @@ kfi_caps Client::capabilities() const
 	return result;
 }
 
+kfi_runtime_info Client::runtime_info() const
+{
+	kfi_runtime_info result{};
+	checked_ioctl(fd_, KFI_IOC_GET_RUNTIME_INFO, &result,
+		      "KFI_IOC_GET_RUNTIME_INFO");
+	return result;
+}
+
 std::uint64_t Client::open_process(std::int32_t pid) const
 {
 	kfi_open_process request{};

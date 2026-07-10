@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: python3 -m py_compile scripts/verify_module.py
+      - run: python3 -m unittest discover -s tests/tools -p 'test_*.py'
       - run: cmake -S user -B build/user -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build/user --parallel
 
@@ -20,9 +22,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update
-      - run: sudo apt-get install -y linux-headers-generic
+      - run: sudo apt-get install -y kmod linux-headers-generic
       - name: Build external module
         run: |
           kernel_dir=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' | sort -V | tail -n1)
           test -n "$kernel_dir"
           make -C "$kernel_dir" M="$PWD/kernel" modules
+      - name: Verify external module
+        run: python3 scripts/verify_module.py kernel/kfi.ko --expected-machine X86-64
+
+  arm64-userspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt-get install -y g++-aarch64-linux-gnu
+      - name: Cross-compile userspace
+        run: |
+          cmake -S user -B build/arm64 \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/arm64 --parallel
+      - name: Verify AArch64 CLI
+        run: readelf -h build/arm64/kfi | grep -q AArch64

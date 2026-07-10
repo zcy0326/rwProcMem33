@@ -6,7 +6,7 @@
 #include <linux/types.h>
 
 #define KFI_ABI_VERSION_MAJOR 1
-#define KFI_ABI_VERSION_MINOR 0
+#define KFI_ABI_VERSION_MINOR 1
 #define KFI_DEVICE_NAME "kfi"
 #define KFI_DEVICE_PATH "/dev/kfi"
 #define KFI_IOC_MAGIC 0xB7
@@ -21,6 +21,15 @@
 #define KFI_CAP_HWBKPT_RW        (1ULL << 7)
 #define KFI_CAP_MODIFY_REGS      (1ULL << 8)
 #define KFI_CAP_POLL_EVENTS      (1ULL << 9)
+#define KFI_CAP_RUNTIME_INFO     (1ULL << 10)
+
+#define KFI_RUNTIME_COMPAT        (1ULL << 0)
+#define KFI_RUNTIME_MODVERSIONS   (1ULL << 1)
+#define KFI_RUNTIME_CFI           (1ULL << 2)
+#define KFI_RUNTIME_KCFI          (1ULL << 3)
+#define KFI_RUNTIME_LTO_CLANG     (1ULL << 4)
+#define KFI_RUNTIME_KPROBES       (1ULL << 5)
+#define KFI_RUNTIME_HW_BREAKPOINT (1ULL << 6)
 
 struct kfi_version {
 	__u16 major;
@@ -56,10 +65,24 @@ struct kfi_close_session {
 	__u64 reserved[3];
 };
 
+struct kfi_runtime_info {
+	__u32 struct_size;
+	__u32 linux_version_code;
+	__u32 page_size;
+	__u32 page_shift;
+	__u64 build_flags;
+	__u64 reserved[3];
+	char release[64];
+	char machine[32];
+	char profile[32];
+};
+
 #define KFI_IOC_GET_VERSION \
 	_IOR(KFI_IOC_MAGIC, 0x00, struct kfi_version)
 #define KFI_IOC_GET_CAPS \
 	_IOR(KFI_IOC_MAGIC, 0x01, struct kfi_caps)
+#define KFI_IOC_GET_RUNTIME_INFO \
+	_IOR(KFI_IOC_MAGIC, 0x02, struct kfi_runtime_info)
 #define KFI_IOC_OPEN_PROCESS \
 	_IOWR(KFI_IOC_MAGIC, 0x10, struct kfi_open_process)
 #define KFI_IOC_CLOSE_SESSION \
