@@ -42,6 +42,12 @@ remaining session. `KFI_IOC_HIDE_MODULE` accepts a
 `kfi_visibility_control` request with `KFI_VISIBILITY_FLAG_HIDE_MODULE` and
 removes the loaded KFI module from the module list and sysfs representation.
 
+`KFI_IOC_READ_MEMORY` and `KFI_IOC_WRITE_MEMORY` use the session ID together
+with a remote address, a userspace buffer pointer, and a bounded request size.
+The kernel returns the completed byte count in `completed_size`; a successful
+partial transfer is reported with a zero ioctl return value. The current
+maximum request size is exposed as `kfi_caps.max_io_size`.
+
 Unknown ioctl numbers return `-ENOTTY`; unknown flags, nonzero reserved fields,
 and malformed requests return `-EINVAL`;
 missing processes return `-ESRCH`.

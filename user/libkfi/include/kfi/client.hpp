@@ -3,6 +3,8 @@
 #define KFI_CLIENT_HPP
 
 #include <cstdint>
+#include <cstddef>
+#include <sys/types.h>
 #include <string>
 
 #include "kfi/endpoint.hpp"
@@ -16,6 +18,34 @@ static_assert(sizeof(kfi_caps) == 128, "unexpected kfi_caps layout");
 static_assert(sizeof(kfi_open_process) == 64, "unexpected open layout");
 static_assert(sizeof(kfi_close_session) == 64, "unexpected close layout");
 static_assert(sizeof(kfi_runtime_info) == 256, "unexpected runtime layout");
+static_assert(sizeof(kfi_memory_io) == 64, "unexpected memory layout");
+
+class Session final {
+public:
+	Session() = delete;
+	~Session();
+
+	Session(const Session &) = delete;
+	Session &operator=(const Session &) = delete;
+	Session(Session &&other) noexcept;
+	Session &operator=(Session &&other) noexcept;
+
+	std::uint64_t id() const noexcept;
+	std::size_t read(std::uint64_t remote_address, void *buffer,
+			std::size_t size) const;
+	std::size_t write(std::uint64_t remote_address, const void *buffer,
+			std::size_t size) const;
+
+private:
+	friend class Client;
+	Session(int fd, std::uint64_t id);
+	void close() noexcept;
+	std::size_t transfer(std::uint64_t remote_address, void *buffer,
+				std::size_t size, bool write) const;
+
+	int fd_ = -1;
+	std::uint64_t id_ = 0;
+};
 
 class Client final {
 public:
@@ -33,7 +63,14 @@ public:
 	kfi_caps capabilities() const;
 	kfi_runtime_info runtime_info() const;
 	std::uint64_t open_process(std::int32_t pid) const;
+	Session open_process_session(std::int32_t pid) const;
 	void close_session(std::uint64_t session_id) const;
+	std::size_t read_memory(std::uint64_t session_id,
+				std::uint64_t remote_address, void *buffer,
+				std::size_t size) const;
+	std::size_t write_memory(std::uint64_t session_id,
+				std::uint64_t remote_address, const void *buffer,
+				std::size_t size) const;
 	void hide_module() const;
 
 	const ResolvedEndpoint &endpoint() const noexcept;

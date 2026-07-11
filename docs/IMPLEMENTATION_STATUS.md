@@ -8,7 +8,7 @@
 | Character-device transport | Implemented | Existing generic CI build | Android device-node test |
 | Private procfs transport | Implemented, hidden, default off | Generator unit tests; WSL userspace build; static review | Target kernel build and procfs ioctl test |
 | C++ endpoint abstraction | Implemented | CTest target added | Linux CI execution |
-| Process memory backend | Not started | None | V1.3 |
+| Process memory backend | Kernel initial implementation | Static review; UAPI and dispatcher wired | Target kernel build and device read/write test |
 | Maps and threads | Not started | None | Later V1 milestone |
 | Module/proc visibility controls | Implemented | UAPI layout assertions; WSL userspace build; static review | Target kernel/device test |
 | Hardware breakpoints and events | Not started | None | Later V1 milestone |

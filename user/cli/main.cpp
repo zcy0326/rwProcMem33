@@ -90,10 +90,9 @@ int main(int argc, char **argv)
 		}
 
 		if (command == "attach" && arguments == 1) {
-			const auto session = client.open_process(
+			const auto session = client.open_process_session(
 				parse_pid(argv[command_index + 1]));
-			std::cout << "session=" << session << '\n';
-			client.close_session(session);
+			std::cout << "session=" << session.id() << '\n';
 			return 0;
 		}
 

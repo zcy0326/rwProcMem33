@@ -2,6 +2,8 @@
 #include "kfi/client.hpp"
 
 #include <cerrno>
+#include <limits>
+#include <stdexcept>
 #include <system_error>
 #include <utility>
 
@@ -19,7 +21,87 @@ void checked_ioctl(int fd, unsigned long request, void *argument,
 		throw std::system_error(errno, std::generic_category(), operation);
 }
 
+std::size_t transfer_memory(int fd, std::uint64_t session_id,
+				std::uint64_t remote_address, void *buffer,
+				std::size_t size, bool write)
+{
+	if (!buffer || size == 0 || size > std::numeric_limits<std::uint32_t>::max())
+		throw std::invalid_argument("invalid memory transfer buffer or size");
+
+	kfi_memory_io request{};
+	request.header.struct_size = sizeof(request);
+	request.session_id = session_id;
+	request.remote_address = remote_address;
+	request.user_buffer = reinterpret_cast<std::uintptr_t>(buffer);
+	request.requested_size = static_cast<std::uint32_t>(size);
+	checked_ioctl(fd, write ? KFI_IOC_WRITE_MEMORY : KFI_IOC_READ_MEMORY,
+			      &request, write ? "KFI_IOC_WRITE_MEMORY" : "KFI_IOC_READ_MEMORY");
+	return request.completed_size;
+}
+
 } // namespace
+
+Session::Session(int fd, std::uint64_t id) : fd_(fd), id_(id)
+{
+}
+
+Session::~Session()
+{
+	close();
+}
+
+Session::Session(Session &&other) noexcept
+	: fd_(std::exchange(other.fd_, -1)), id_(std::exchange(other.id_, 0))
+{
+}
+
+Session &Session::operator=(Session &&other) noexcept
+{
+	if (this == &other)
+		return *this;
+	close();
+	fd_ = std::exchange(other.fd_, -1);
+	id_ = std::exchange(other.id_, 0);
+	return *this;
+}
+
+void Session::close() noexcept
+{
+	if (fd_ == -1)
+		return;
+	kfi_close_session request{};
+	request.header.struct_size = sizeof(request);
+	request.session_id = id_;
+	(void)::ioctl(fd_, KFI_IOC_CLOSE_SESSION, &request);
+	::close(fd_);
+	fd_ = -1;
+	id_ = 0;
+}
+
+std::uint64_t Session::id() const noexcept
+{
+	return id_;
+}
+
+std::size_t Session::read(std::uint64_t remote_address, void *buffer,
+				std::size_t size) const
+{
+	return transfer(remote_address, buffer, size, false);
+}
+
+std::size_t Session::write(std::uint64_t remote_address, const void *buffer,
+				 std::size_t size) const
+{
+	return transfer(remote_address, const_cast<void *>(buffer), size, true);
+}
+
+std::size_t Session::transfer(std::uint64_t remote_address, void *buffer,
+				      std::size_t size, bool write) const
+{
+	if (fd_ == -1)
+		throw std::system_error(EBADF, std::generic_category(), "closed session");
+	return transfer_memory(fd_, id_, remote_address, buffer, size, write);
+}
 
 Client::Client() : Client(Endpoint::Auto())
 {
@@ -96,6 +178,21 @@ std::uint64_t Client::open_process(std::int32_t pid) const
 	return request.session_id;
 }
 
+Session Client::open_process_session(std::int32_t pid) const
+{
+	const auto id = open_process(pid);
+	const int duplicated_fd = ::fcntl(fd_, F_DUPFD_CLOEXEC, 0);
+	if (duplicated_fd == -1) {
+		try {
+			close_session(id);
+		} catch (...) {
+		}
+		throw std::system_error(errno, std::generic_category(),
+					"duplicate KFI session descriptor");
+	}
+	return Session(duplicated_fd, id);
+}
+
 void Client::close_session(std::uint64_t session_id) const
 {
 	kfi_close_session request{};
@@ -103,6 +200,21 @@ void Client::close_session(std::uint64_t session_id) const
 	request.session_id = session_id;
 	checked_ioctl(fd_, KFI_IOC_CLOSE_SESSION, &request,
 		      "KFI_IOC_CLOSE_SESSION");
+}
+
+std::size_t Client::read_memory(std::uint64_t session_id,
+				std::uint64_t remote_address, void *buffer,
+				std::size_t size) const
+{
+	return transfer_memory(fd_, session_id, remote_address, buffer, size, false);
+}
+
+std::size_t Client::write_memory(std::uint64_t session_id,
+				 std::uint64_t remote_address, const void *buffer,
+				 std::size_t size) const
+{
+	return transfer_memory(fd_, session_id, remote_address,
+				       const_cast<void *>(buffer), size, true);
 }
 
 void Client::hide_module() const
