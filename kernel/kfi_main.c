@@ -38,5 +38,5 @@ module_exit(kfi_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("KFI contributors");
 MODULE_DESCRIPTION("Kernel-assisted instrumentation interface");
-MODULE_VERSION("1.1.0");
-MODULE_INFO(kfi_abi, "1.1");
+MODULE_VERSION("1.2.0");
+MODULE_INFO(kfi_abi, "1.2");

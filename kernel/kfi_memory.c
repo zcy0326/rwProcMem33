@@ -25,7 +25,8 @@ static int kfi_memory_validate_request(const struct kfi_memory_io *request)
 		return -EINVAL;
 	if (check_add_overflow(request->remote_address,
 			       (u64)request->requested_size, &end) ||
-	    end <= request->remote_address || request->remote_address > ULONG_MAX)
+	    end <= request->remote_address || request->remote_address > ULONG_MAX ||
+	    end - 1 > ULONG_MAX)
 		return -EOVERFLOW;
 	if (!access_ok(u64_to_user_ptr(request->user_buffer),
 		       request->requested_size))

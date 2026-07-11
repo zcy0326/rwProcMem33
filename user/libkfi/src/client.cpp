@@ -39,6 +39,34 @@ std::size_t transfer_memory(int fd, std::uint64_t session_id,
 	return request.completed_size;
 }
 
+template <typename Entry>
+std::vector<Entry> enumerate(int fd, std::uint64_t session_id,
+                             unsigned long command, const char *operation)
+{
+	constexpr std::uint32_t page_capacity = 128;
+	std::vector<Entry> result;
+	std::uint64_t cursor = 0;
+	for (;;) {
+		std::vector<Entry> page(page_capacity);
+		kfi_enumerate request{};
+		request.header.struct_size = sizeof(request);
+		request.session_id = session_id;
+		request.user_buffer = reinterpret_cast<std::uintptr_t>(page.data());
+		request.cursor = cursor;
+		request.capacity = page_capacity;
+		checked_ioctl(fd, command, &request, operation);
+		if (request.returned > page_capacity)
+			throw std::runtime_error("kernel returned an invalid enumeration count");
+		result.insert(result.end(), page.begin(), page.begin() + request.returned);
+		if (request.result_flags & KFI_ENUM_RESULT_END)
+			break;
+		if (!request.returned || request.next_cursor == cursor)
+			throw std::runtime_error("kernel enumeration made no progress");
+		cursor = request.next_cursor;
+	}
+	return result;
+}
+
 } // namespace
 
 Session::Session(int fd, std::uint64_t id) : fd_(fd), id_(id)
@@ -101,6 +129,22 @@ std::size_t Session::transfer(std::uint64_t remote_address, void *buffer,
 	if (fd_ == -1)
 		throw std::system_error(EBADF, std::generic_category(), "closed session");
 	return transfer_memory(fd_, id_, remote_address, buffer, size, write);
+}
+
+std::vector<kfi_thread_entry> Session::threads() const
+{
+	if (fd_ == -1)
+		throw std::system_error(EBADF, std::generic_category(), "closed session");
+	return enumerate<kfi_thread_entry>(fd_, id_, KFI_IOC_ENUM_THREADS,
+					   "KFI_IOC_ENUM_THREADS");
+}
+
+std::vector<kfi_map_entry> Session::maps() const
+{
+	if (fd_ == -1)
+		throw std::system_error(EBADF, std::generic_category(), "closed session");
+	return enumerate<kfi_map_entry>(fd_, id_, KFI_IOC_ENUM_MAPS,
+					"KFI_IOC_ENUM_MAPS");
 }
 
 Client::Client() : Client(Endpoint::Auto())
@@ -183,11 +227,12 @@ Session Client::open_process_session(std::int32_t pid) const
 	const auto id = open_process(pid);
 	const int duplicated_fd = ::fcntl(fd_, F_DUPFD_CLOEXEC, 0);
 	if (duplicated_fd == -1) {
+		const int duplicate_error = errno;
 		try {
 			close_session(id);
 		} catch (...) {
 		}
-		throw std::system_error(errno, std::generic_category(),
+		throw std::system_error(duplicate_error, std::generic_category(),
 					"duplicate KFI session descriptor");
 	}
 	return Session(duplicated_fd, id);

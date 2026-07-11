@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <sys/types.h>
 #include <string>
+#include <vector>
 
 #include "kfi/endpoint.hpp"
 
@@ -35,6 +36,8 @@ public:
 			std::size_t size) const;
 	std::size_t write(std::uint64_t remote_address, const void *buffer,
 			std::size_t size) const;
+	std::vector<kfi_thread_entry> threads() const;
+	std::vector<kfi_map_entry> maps() const;
 
 private:
 	friend class Client;

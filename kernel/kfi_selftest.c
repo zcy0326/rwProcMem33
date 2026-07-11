@@ -12,7 +12,7 @@ int kfi_selftest_run(void)
 	struct kfi_runtime_info info;
 
 	kfi_runtime_get(&info);
-	if (info.struct_size != sizeof(info))
+	if (info.header.struct_size != sizeof(info))
 		return -EINVAL;
 	if (!is_power_of_2(info.page_size))
 		return -EINVAL;

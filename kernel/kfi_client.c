@@ -10,7 +10,9 @@
 #include <linux/uaccess.h>
 
 #include "kfi_internal.h"
+#include "kfi_maps.h"
 #include "kfi_memory.h"
+#include "kfi_task.h"
 #include "kfi_session.h"
 #include "kfi_transport.h"
 #include "kfi_uapi.h"
@@ -121,6 +123,8 @@ static long kfi_get_caps(unsigned long arg)
 			 KFI_CAP_RUNTIME_INFO | KFI_CAP_SESSION_REFS |
 			 kfi_transport_capabilities() |
 			 kfi_memory_capabilities() |
+			 kfi_maps_capabilities() |
+			 kfi_task_capabilities() |
 			 kfi_visibility_capabilities(),
 		.max_sessions = KFI_MAX_SESSIONS,
 		.max_io_size = KFI_MAX_IO_SIZE,
@@ -207,6 +211,10 @@ long kfi_dispatch_ioctl(struct kfi_client *client, unsigned int cmd,
 		return kfi_memory_ioctl_read(client, (void __user *)arg);
 	case KFI_IOC_WRITE_MEMORY:
 		return kfi_memory_ioctl_write(client, (void __user *)arg);
+	case KFI_IOC_ENUM_THREADS:
+		return kfi_task_ioctl_enumerate(client, (void __user *)arg);
+	case KFI_IOC_ENUM_MAPS:
+		return kfi_maps_ioctl_enumerate(client, (void __user *)arg);
 	case KFI_IOC_HIDE_MODULE:
 		return kfi_hide_module(arg);
 	default:

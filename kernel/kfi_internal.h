@@ -55,6 +55,9 @@ static_assert(sizeof(struct kfi_open_process) == 64);
 static_assert(sizeof(struct kfi_close_session) == 64);
 static_assert(sizeof(struct kfi_runtime_info) == 256);
 static_assert(sizeof(struct kfi_memory_io) == 64);
+static_assert(sizeof(struct kfi_enumerate) == 64);
+static_assert(sizeof(struct kfi_thread_entry) == 64);
+static_assert(sizeof(struct kfi_map_entry) == 320);
 static_assert(sizeof(struct kfi_visibility_control) == 64);
 
 #endif

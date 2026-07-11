@@ -9,7 +9,7 @@
 | Private procfs transport | Implemented, hidden, default off | Generator unit tests; WSL userspace build; static review | Target kernel build and procfs ioctl test |
 | C++ endpoint abstraction | Implemented | CTest target added | Linux CI execution |
 | Process memory backend | Kernel initial implementation | Static review; UAPI and dispatcher wired | Target kernel build and device read/write test |
-| Maps and threads | Not started | None | Later V1 milestone |
+| Maps and threads | Kernel initial implementation | Cursor UAPI and layout assertions; static review | Target kernel build and live-process pagination tests |
 | Module/proc visibility controls | Implemented | UAPI layout assertions; WSL userspace build; static review | Target kernel/device test |
 | Hardware breakpoints and events | Not started | None | Later V1 milestone |
 

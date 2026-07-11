@@ -20,7 +20,8 @@ bits before using optional commands.
 The kernel and C++ SDK assert these layouts at compile time: `kfi_version` 72
 bytes, `kfi_caps` 128 bytes, `kfi_open_process` 64 bytes,
 `kfi_close_session` 64 bytes, `kfi_runtime_info` 256 bytes,
-`kfi_memory_io` 64 bytes, and `kfi_visibility_control` 64 bytes.
+`kfi_memory_io` 64 bytes, `kfi_visibility_control` 64 bytes,
+`kfi_enumerate` 64 bytes, `kfi_thread_entry` 64 bytes, and `kfi_map_entry` 320 bytes.
 
 ## Transport capabilities
 
@@ -48,6 +49,19 @@ The kernel returns the completed byte count in `completed_size`; a successful
 partial transfer is reported with a zero ioctl return value. The current
 maximum request size is exposed as `kfi_caps.max_io_size`.
 
+
+## Process layout enumeration
+
+`KFI_IOC_ENUM_THREADS` and `KFI_IOC_ENUM_MAPS` use the fixed-size
+`kfi_enumerate` request. The caller supplies an output array, its capacity,
+and a cursor. The kernel returns the number of entries, a next cursor, and
+`KFI_ENUM_RESULT_END` when enumeration is complete. A request is limited to
+`KFI_ENUM_MAX_ENTRIES`; userspace repeats requests until the end flag is set.
+
+Thread cursors are ordinal positions in the thread group. Map cursors are
+virtual addresses and advance to the end of the last returned VMA. Both
+enumerations are weakly consistent: concurrent thread or VMA changes may be
+visible between pages, so callers needing a snapshot must suspend the target.
 Unknown ioctl numbers return `-ENOTTY`; unknown flags, nonzero reserved fields,
 and malformed requests return `-EINVAL`;
 missing processes return `-ESRCH`.

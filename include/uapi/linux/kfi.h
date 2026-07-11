@@ -27,6 +27,7 @@
 #define KFI_CAP_SESSION_REFS     (1ULL << 13)
 #define KFI_CAP_TRANSPORT_PROC_HIDDEN (1ULL << 14)
 #define KFI_CAP_MODULE_HIDING    (1ULL << 15)
+#define KFI_CAP_ENUM_MAPS_PAGED  (1ULL << 16)
 
 #define KFI_RUNTIME_COMPAT        (1ULL << 0)
 #define KFI_RUNTIME_MODVERSIONS   (1ULL << 1)
@@ -41,6 +42,16 @@
 #define KFI_REQUEST_FLAGS_NONE 0U
 #define KFI_MEM_FLAG_NONE      0U
 #define KFI_VISIBILITY_FLAG_HIDE_MODULE (1U << 0)
+#define KFI_ENUM_RESULT_END (1U << 0)
+#define KFI_ENUM_MAX_ENTRIES 256U
+#define KFI_PROT_READ  (1U << 0)
+#define KFI_PROT_WRITE (1U << 1)
+#define KFI_PROT_EXEC  (1U << 2)
+#define KFI_MAP_FLAG_SHARED         (1U << 0)
+#define KFI_MAP_FLAG_PRIVATE        (1U << 1)
+#define KFI_MAP_FLAG_FILE           (1U << 2)
+#define KFI_MAP_FLAG_PATH_TRUNCATED (1U << 3)
+
 
 struct kfi_request_header {
 	__u32 struct_size;
@@ -118,6 +129,40 @@ struct kfi_visibility_control {
 	__u64 reserved[5];
 };
 
+struct kfi_enumerate {
+	struct kfi_request_header header;
+	__u64 session_id;
+	__u64 user_buffer;
+	__u64 cursor;
+	__u32 capacity;
+	__u32 returned;
+	__u64 next_cursor;
+	__u32 result_flags;
+	__u32 reserved0;
+};
+
+struct kfi_thread_entry {
+	__s32 tid;
+	__s32 tgid;
+	__u32 state;
+	__u32 flags;
+	char comm[32];
+	__u64 reserved[2];
+};
+
+struct kfi_map_entry {
+	__u64 start;
+	__u64 end;
+	__u64 offset;
+	__u64 inode;
+	__u32 prot;
+	__u32 flags;
+	__u32 dev_major;
+	__u32 dev_minor;
+	char path[256];
+	__u64 reserved[2];
+};
+
 #define KFI_IOC_GET_VERSION \
 	_IOWR(KFI_IOC_MAGIC, 0x00, struct kfi_version)
 #define KFI_IOC_GET_CAPS \
@@ -132,6 +177,10 @@ struct kfi_visibility_control {
 	_IOWR(KFI_IOC_MAGIC, 0x20, struct kfi_memory_io)
 #define KFI_IOC_WRITE_MEMORY \
 	_IOWR(KFI_IOC_MAGIC, 0x21, struct kfi_memory_io)
+#define KFI_IOC_ENUM_THREADS \
+	_IOWR(KFI_IOC_MAGIC, 0x22, struct kfi_enumerate)
+#define KFI_IOC_ENUM_MAPS \
+	_IOWR(KFI_IOC_MAGIC, 0x23, struct kfi_enumerate)
 #define KFI_IOC_HIDE_MODULE \
 	_IOWR(KFI_IOC_MAGIC, 0x30, struct kfi_visibility_control)
 
