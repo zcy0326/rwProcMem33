@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(kfi_user VERSION 1.1.0 LANGUAGES CXX)
+project(kfi_user VERSION 1.2.0 LANGUAGES CXX)
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID)
   message(FATAL_ERROR "KFI userspace requires Linux or Android")

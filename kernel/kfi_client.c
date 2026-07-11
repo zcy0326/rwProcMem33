@@ -10,32 +10,14 @@
 #include <linux/uaccess.h>
 
 #include "kfi_internal.h"
+#include "kfi_memory.h"
+#include "kfi_session.h"
 #include "kfi_transport.h"
+#include "kfi_uapi.h"
 
 static atomic64_t kfi_next_client_id = ATOMIC64_INIT(0);
 
-static bool kfi_reserved_is_zero(const __u64 *values, size_t count)
-{
-	size_t i;
-
-	for (i = 0; i < count; i++) {
-		if (values[i])
-			return false;
-	}
-
-	return true;
-}
-
-static void kfi_session_destroy(struct kfi_session *session)
-{
-	if (!session)
-		return;
-
-	put_pid(session->tgid);
-	kfree(session);
-}
-
-static bool kfi_client_authorized(const struct kfi_client *client)
+bool kfi_client_authorized(const struct kfi_client *client)
 {
 	return uid_eq(current_euid(), client->owner_euid) ||
 	       capable(CAP_SYS_PTRACE);
@@ -67,17 +49,14 @@ int kfi_client_create(struct file *file,
 void kfi_client_destroy(struct file *file)
 {
 	struct kfi_client *client = file->private_data;
-	struct kfi_session *session;
-	int id;
 
 	if (!client)
 		return;
 
 	mutex_lock(&client->lock);
-	idr_for_each_entry(&client->sessions, session, id)
-		kfi_session_destroy(session);
-	idr_destroy(&client->sessions);
+	client->closing = true;
 	mutex_unlock(&client->lock);
+	kfi_session_shutdown_all(client);
 
 	file->private_data = NULL;
 	kfree(client);
@@ -85,139 +64,122 @@ void kfi_client_destroy(struct file *file)
 
 static long kfi_get_version(struct kfi_client *client, unsigned long arg)
 {
-	struct kfi_version version = {
+	struct kfi_version version;
+	u64 request_id;
+	int error;
+
+	error = kfi_uapi_copy_request(&version, sizeof(version),
+				      (void __user *)arg,
+				      KFI_REQUEST_FLAGS_NONE);
+	if (error)
+		return error;
+	if (version.reserved0 ||
+	    !kfi_uapi_reserved_is_zero(version.reserved,
+				       ARRAY_SIZE(version.reserved)))
+		return -EINVAL;
+	request_id = version.header.request_id;
+	memset(&version, 0, sizeof(version));
+	version = (struct kfi_version) {
+		.header = {
+			.struct_size = sizeof(version),
+			.request_id = request_id,
+		},
 		.major = KFI_ABI_VERSION_MAJOR,
 		.minor = KFI_ABI_VERSION_MINOR,
 		.patch = 0,
-		.abi_header_size = sizeof(struct kfi_version),
+		.abi_header_size = sizeof(struct kfi_request_header),
 		.module_version = KFI_MODULE_VERSION,
 		.client_id = client->id,
 	};
 
-	if (copy_to_user((void __user *)arg, &version, sizeof(version)))
-		return -EFAULT;
-
-	return 0;
+	return kfi_uapi_copy_response((void __user *)arg, &version,
+				      sizeof(version));
 }
 
 static long kfi_get_caps(unsigned long arg)
 {
-	struct kfi_caps caps = {
+	struct kfi_caps caps;
+	u64 request_id;
+	int error;
+
+	error = kfi_uapi_copy_request(&caps, sizeof(caps), (void __user *)arg,
+				      KFI_REQUEST_FLAGS_NONE);
+	if (error)
+		return error;
+	if (caps.reserved0 ||
+	    !kfi_uapi_reserved_is_zero(caps.reserved,
+				       ARRAY_SIZE(caps.reserved)))
+		return -EINVAL;
+	request_id = caps.header.request_id;
+	memset(&caps, 0, sizeof(caps));
+	caps = (struct kfi_caps) {
+		.header = {
+			.struct_size = sizeof(caps),
+			.request_id = request_id,
+		},
 		.flags = KFI_CAP_CLIENT_ISOLATION | KFI_CAP_OPAQUE_SESSIONS |
-			 KFI_CAP_RUNTIME_INFO |
-			 kfi_transport_capabilities(),
+			 KFI_CAP_RUNTIME_INFO | KFI_CAP_SESSION_REFS |
+			 kfi_transport_capabilities() |
+			 kfi_memory_capabilities() |
+			 kfi_visibility_capabilities(),
 		.max_sessions = KFI_MAX_SESSIONS,
 		.max_io_size = KFI_MAX_IO_SIZE,
 	};
 
-	if (copy_to_user((void __user *)arg, &caps, sizeof(caps)))
-		return -EFAULT;
-
-	return 0;
+	return kfi_uapi_copy_response((void __user *)arg, &caps, sizeof(caps));
 }
 
 static long kfi_get_runtime_info(unsigned long arg)
 {
 	struct kfi_runtime_info info;
+	u64 request_id;
+	int error;
 
+	error = kfi_uapi_copy_request(&info, sizeof(info), (void __user *)arg,
+				      KFI_REQUEST_FLAGS_NONE);
+	if (error)
+		return error;
+	if (!kfi_uapi_reserved_is_zero(info.reserved,
+				       ARRAY_SIZE(info.reserved)))
+		return -EINVAL;
+	request_id = info.header.request_id;
 	kfi_runtime_get(&info);
-	if (copy_to_user((void __user *)arg, &info, sizeof(info)))
-		return -EFAULT;
-
-	return 0;
+	info.header.struct_size = sizeof(info);
+	info.header.request_id = request_id;
+	return kfi_uapi_copy_response((void __user *)arg, &info, sizeof(info));
 }
 
 static long kfi_open_process(struct kfi_client *client, unsigned long arg)
 {
-	struct kfi_open_process request;
-	struct kfi_session *session;
-	struct task_struct *task;
-	struct pid *pid;
-	int id;
-	u32 generation;
-
-	if (copy_from_user(&request, (void __user *)arg, sizeof(request)))
-		return -EFAULT;
-	if (request.pid <= 0 || request.flags || request.session_id ||
-	    !kfi_reserved_is_zero(request.reserved,
-				  ARRAY_SIZE(request.reserved)))
-		return -EINVAL;
-
-	pid = find_get_pid(request.pid);
-	if (!pid)
-		return -ESRCH;
-
-	task = get_pid_task(pid, PIDTYPE_PID);
-	put_pid(pid);
-	if (!task)
-		return -ESRCH;
-
-	session = kzalloc(sizeof(*session), GFP_KERNEL);
-	if (!session) {
-		put_task_struct(task);
-		return -ENOMEM;
-	}
-
-	session->tgid = get_task_pid(task, PIDTYPE_TGID);
-	session->opened_pid = request.pid;
-	put_task_struct(task);
-	if (!session->tgid) {
-		kfree(session);
-		return -ESRCH;
-	}
-
-	mutex_lock(&client->lock);
-	id = idr_alloc(&client->sessions, session, 1, KFI_MAX_SESSIONS + 1,
-		       GFP_KERNEL);
-	if (id >= 0) {
-		generation = ++client->session_generation;
-		if (!generation)
-			generation = ++client->session_generation;
-		session->id = ((u64)generation << 32) | (u32)id;
-	}
-	mutex_unlock(&client->lock);
-	if (id < 0) {
-		kfi_session_destroy(session);
-		return id;
-	}
-
-	request.session_id = session->id;
-	if (copy_to_user((void __user *)arg, &request, sizeof(request))) {
-		mutex_lock(&client->lock);
-		session = idr_remove(&client->sessions, id);
-		mutex_unlock(&client->lock);
-		kfi_session_destroy(session);
-		return -EFAULT;
-	}
-
-	return 0;
+	return kfi_session_ioctl_open(client, (void __user *)arg);
 }
 
 static long kfi_close_session(struct kfi_client *client, unsigned long arg)
 {
-	struct kfi_close_session request;
-	struct kfi_session *session;
-	u32 slot;
+	return kfi_session_ioctl_close(client, (void __user *)arg);
+}
 
-	if (copy_from_user(&request, (void __user *)arg, sizeof(request)))
-		return -EFAULT;
-	slot = (u32)request.session_id;
-	if (!request.session_id || !slot || slot > KFI_MAX_SESSIONS ||
-	    !kfi_reserved_is_zero(request.reserved,
-				  ARRAY_SIZE(request.reserved)))
+static long kfi_hide_module(unsigned long arg)
+{
+	struct kfi_visibility_control request;
+	int error;
+
+	error = kfi_uapi_copy_request(&request, sizeof(request),
+				      (void __user *)arg,
+				      KFI_REQUEST_FLAGS_NONE);
+	if (error)
+		return error;
+	if (request.operations != KFI_VISIBILITY_FLAG_HIDE_MODULE ||
+	    request.reserved0 ||
+	    !kfi_uapi_reserved_is_zero(request.reserved,
+				       ARRAY_SIZE(request.reserved)))
 		return -EINVAL;
 
-	mutex_lock(&client->lock);
-	session = idr_find(&client->sessions, slot);
-	if (!session || session->id != request.session_id) {
-		mutex_unlock(&client->lock);
-		return -ENOENT;
-	}
-	idr_remove(&client->sessions, slot);
-	mutex_unlock(&client->lock);
-
-	kfi_session_destroy(session);
-	return 0;
+	error = kfi_visibility_hide_module();
+	if (error)
+		return error;
+	return kfi_uapi_copy_response((void __user *)arg, &request,
+				      sizeof(request));
 }
 
 long kfi_dispatch_ioctl(struct kfi_client *client, unsigned int cmd,
@@ -241,6 +203,12 @@ long kfi_dispatch_ioctl(struct kfi_client *client, unsigned int cmd,
 		return kfi_open_process(client, arg);
 	case KFI_IOC_CLOSE_SESSION:
 		return kfi_close_session(client, arg);
+	case KFI_IOC_READ_MEMORY:
+		return kfi_memory_ioctl_read(client, (void __user *)arg);
+	case KFI_IOC_WRITE_MEMORY:
+		return kfi_memory_ioctl_write(client, (void __user *)arg);
+	case KFI_IOC_HIDE_MODULE:
+		return kfi_hide_module(arg);
 	default:
 		return -ENOTTY;
 	}

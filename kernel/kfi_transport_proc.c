@@ -5,6 +5,7 @@
 
 #include "generated/kfi_private_config.h"
 #include "kfi_internal.h"
+#include "kfi_visibility.h"
 #include "kfi_transport.h"
 
 static struct proc_dir_entry *kfi_proc_directory;
@@ -40,13 +41,31 @@ int kfi_transport_proc_init(void)
 		return -ENOMEM;
 	}
 
+	{
+		int error = kfi_visibility_proc_hide_start(KFI_PRIVATE_PROC_NAME);
+		if (error) {
+			proc_remove(kfi_proc_endpoint);
+			proc_remove(kfi_proc_directory);
+			kfi_proc_endpoint = NULL;
+			kfi_proc_directory = NULL;
+			return error;
+		}
+	}
+
 	pr_info("kfi: private proc transport registered (instance %s)\n",
 		KFI_PRIVATE_BUILD_INSTANCE_ID);
 	return 0;
 }
 
+u64 kfi_transport_proc_capabilities(void)
+{
+	return kfi_visibility_proc_hide_active() ?
+		KFI_CAP_TRANSPORT_PROC_HIDDEN : 0;
+}
+
 void kfi_transport_proc_exit(void)
 {
+	kfi_visibility_proc_hide_stop();
 	proc_remove(kfi_proc_endpoint);
 	proc_remove(kfi_proc_directory);
 	kfi_proc_endpoint = NULL;

@@ -26,7 +26,7 @@ void usage(const char *program)
 	std::cerr
 		<< "usage: " << program
 		<< " [--endpoint auto|dev:/path|proc:/proc/path] "
-		   "<endpoint-info|version|caps|runtime|attach PID>\n";
+		   "<endpoint-info|version|caps|runtime|attach PID|hide-module>\n";
 }
 
 } // namespace
@@ -94,6 +94,12 @@ int main(int argc, char **argv)
 				parse_pid(argv[command_index + 1]));
 			std::cout << "session=" << session << '\n';
 			client.close_session(session);
+			return 0;
+		}
+
+		if (command == "hide-module" && arguments == 0) {
+			client.hide_module();
+			std::cout << "module hidden\n";
 			return 0;
 		}
 

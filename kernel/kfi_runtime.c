@@ -5,6 +5,7 @@
 #include <linux/version.h>
 
 #include "kfi_internal.h"
+#include "kfi_memory.h"
 
 static u64 kfi_runtime_build_flags(void)
 {
@@ -46,11 +47,16 @@ void kfi_runtime_get(struct kfi_runtime_info *info)
 	const struct new_utsname *name = utsname();
 
 	memset(info, 0, sizeof(*info));
-	info->struct_size = sizeof(*info);
+	info->header.struct_size = sizeof(*info);
 	info->linux_version_code = LINUX_VERSION_CODE;
 	info->page_size = PAGE_SIZE;
 	info->page_shift = PAGE_SHIFT;
 	info->build_flags = kfi_runtime_build_flags();
+	info->transport_caps = kfi_transport_capabilities();
+	info->active_caps = KFI_CAP_CLIENT_ISOLATION |
+		KFI_CAP_OPAQUE_SESSIONS | KFI_CAP_RUNTIME_INFO |
+		KFI_CAP_SESSION_REFS | info->transport_caps |
+		kfi_memory_capabilities() | kfi_visibility_capabilities();
 	strscpy(info->release, name->release, sizeof(info->release));
 	strscpy(info->machine, name->machine, sizeof(info->machine));
 	strscpy(info->profile, KFI_PROFILE_NAME, sizeof(info->profile));

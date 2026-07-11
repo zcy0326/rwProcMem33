@@ -20,7 +20,7 @@ endif
 
 obj-m += kfi.o
 kfi-y := kfi_main.o kfi_client.o kfi_compat.o kfi_runtime.o \
-	 kfi_selftest.o kfi_transport.o
+	 kfi_selftest.o kfi_transport.o kfi_visibility.o
 
 ifeq ($(KFI_TRANSPORT_CHAR),y)
 ccflags-y += -DKFI_ENABLE_TRANSPORT_CHAR

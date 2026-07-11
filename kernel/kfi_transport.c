@@ -81,6 +81,10 @@ u64 kfi_transport_capabilities(void)
 		flags |= KFI_CAP_TRANSPORT_CHAR;
 	if (kfi_proc_active)
 		flags |= KFI_CAP_TRANSPORT_PROC_PRIVATE;
+#ifdef KFI_ENABLE_TRANSPORT_PROC_PRIVATE
+	if (kfi_proc_active)
+		flags |= kfi_transport_proc_capabilities();
+#endif
 
 	return flags;
 }

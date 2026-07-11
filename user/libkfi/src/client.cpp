@@ -64,6 +64,7 @@ Client &Client::operator=(Client &&other) noexcept
 kfi_version Client::version() const
 {
 	kfi_version result{};
+	result.header.struct_size = sizeof(result);
 	checked_ioctl(fd_, KFI_IOC_GET_VERSION, &result, "KFI_IOC_GET_VERSION");
 	return result;
 }
@@ -71,6 +72,7 @@ kfi_version Client::version() const
 kfi_caps Client::capabilities() const
 {
 	kfi_caps result{};
+	result.header.struct_size = sizeof(result);
 	checked_ioctl(fd_, KFI_IOC_GET_CAPS, &result, "KFI_IOC_GET_CAPS");
 	return result;
 }
@@ -78,6 +80,7 @@ kfi_caps Client::capabilities() const
 kfi_runtime_info Client::runtime_info() const
 {
 	kfi_runtime_info result{};
+	result.header.struct_size = sizeof(result);
 	checked_ioctl(fd_, KFI_IOC_GET_RUNTIME_INFO, &result,
 		      "KFI_IOC_GET_RUNTIME_INFO");
 	return result;
@@ -86,6 +89,7 @@ kfi_runtime_info Client::runtime_info() const
 std::uint64_t Client::open_process(std::int32_t pid) const
 {
 	kfi_open_process request{};
+	request.header.struct_size = sizeof(request);
 	request.pid = pid;
 	checked_ioctl(fd_, KFI_IOC_OPEN_PROCESS, &request,
 		      "KFI_IOC_OPEN_PROCESS");
@@ -95,9 +99,18 @@ std::uint64_t Client::open_process(std::int32_t pid) const
 void Client::close_session(std::uint64_t session_id) const
 {
 	kfi_close_session request{};
+	request.header.struct_size = sizeof(request);
 	request.session_id = session_id;
 	checked_ioctl(fd_, KFI_IOC_CLOSE_SESSION, &request,
 		      "KFI_IOC_CLOSE_SESSION");
+}
+
+void Client::hide_module() const
+{
+	kfi_visibility_control request{};
+	request.header.struct_size = sizeof(request);
+	request.operations = KFI_VISIBILITY_FLAG_HIDE_MODULE;
+	checked_ioctl(fd_, KFI_IOC_HIDE_MODULE, &request, "KFI_IOC_HIDE_MODULE");
 }
 
 const ResolvedEndpoint &Client::endpoint() const noexcept

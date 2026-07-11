@@ -17,8 +17,9 @@ config KFI_TRANSPORT_PROC_PRIVATE
 	bool "KFI private procfs transport"
 	default n
 	depends on PROC_FS
+	depends on KPROBES
 	help
-	  Register a build-specific, mode 0600 procfs endpoint. This transport
-	  is a normal visible procfs entry and does not alter directory listing.
+	  Register a build-specific, mode 0600 procfs endpoint. The endpoint
+	  is removed from procfs directory listings through a kprobe.
 
 endif
