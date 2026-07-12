@@ -4,6 +4,7 @@
 #include <atomic>
 
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
@@ -30,11 +31,23 @@ int system_close(int fd)
 	return ::close(fd);
 }
 
+ssize_t system_read(int fd, void *buffer, std::size_t size)
+{
+	return ::read(fd, buffer, size);
+}
+
+int system_poll(struct pollfd *fds, nfds_t count, int timeout_ms)
+{
+	return ::poll(fds, count, timeout_ms);
+}
+
 const Syscalls default_syscalls{
 	&system_open,
 	&system_ioctl,
 	&system_dup_cloexec,
 	&system_close,
+	&system_read,
+	&system_poll,
 };
 
 std::atomic<const Syscalls *> active_syscalls{&default_syscalls};

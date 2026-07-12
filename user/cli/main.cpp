@@ -40,7 +40,7 @@ void usage(const char *program)
 		<< "usage: " << program
 		<< " [--endpoint auto|dev:/path|proc:/proc/path] "
 		   "<endpoint-info|version|caps|runtime|attach PID|"
-		   "threads PID|maps PID|hide-module>\n";
+		   "threads PID|maps PID|events PID|event-stats|hide-module>\n";
 }
 
 } // namespace
@@ -91,6 +91,7 @@ int main(int argc, char **argv)
 				  << std::dec
 				  << " max_sessions=" << caps.max_sessions
 				  << " max_io_size=" << caps.max_io_size
+				  << " event_size=" << caps.event_size
 				  << '\n';
 			return 0;
 		}
@@ -151,6 +152,39 @@ int main(int argc, char **argv)
 				    KFI_MAP_FLAG_PATH_TRUNCATED)
 					std::cout << " [truncated]";
 				std::cout << '\n';
+			}
+			return 0;
+		}
+
+		if (command == "event-stats" && arguments == 0) {
+			const auto stats = client.event_stats();
+			std::cout << "queued=" << stats.queued
+				  << " capacity=" << stats.capacity
+				  << " lost=" << stats.lost
+				  << " next_sequence=" << stats.next_sequence
+				  << " shutdown="
+				  << ((stats.flags & KFI_EVENT_STATS_FLAG_SHUTDOWN) ?
+					      "yes" : "no")
+				  << '\n';
+			return 0;
+		}
+
+		if (command == "events" && arguments == 1) {
+			const auto session = client.open_process_session(
+				parse_pid(argv[command_index + 1]));
+			(void)session;
+			if (!client.wait_for_events(1000)) {
+				std::cout << "no events\n";
+				return 0;
+			}
+			for (const auto &event : client.read_events()) {
+				std::cout << "sequence=" << event.sequence
+					  << " type=" << kfi::event_type_name(event.type)
+					  << " timestamp_ns=" << event.timestamp_ns
+					  << " session=" << event.session_id
+					  << " pid=" << event.pid
+					  << " tid=" << event.tid
+					  << " cpu=" << event.cpu << '\n';
 			}
 			return 0;
 		}

@@ -10,6 +10,7 @@
 #include <utility>
 
 #include <fcntl.h>
+#include <poll.h>
 
 namespace kfi {
 namespace {
@@ -334,6 +335,60 @@ std::size_t Client::write_memory(std::uint64_t session_id,
 			       caps.max_io_size, true);
 }
 
+
+kfi_event_stats Client::event_stats() const
+{
+	kfi_event_stats result{};
+	result.header.struct_size = sizeof(result);
+	checked_ioctl(fd_, KFI_IOC_GET_EVENT_STATS, &result,
+		      "KFI_IOC_GET_EVENT_STATS");
+	return result;
+}
+
+bool Client::wait_for_events(int timeout_ms) const
+{
+	if (timeout_ms < -1)
+		throw std::invalid_argument("invalid event timeout");
+
+	struct pollfd descriptor {
+		fd_, POLLIN, 0
+	};
+	const int result = detail::syscalls().poll(&descriptor, 1, timeout_ms);
+	if (result == -1)
+		throw std::system_error(errno, std::generic_category(), "poll KFI events");
+	if (!result)
+		return false;
+	if (descriptor.revents & (POLLERR | POLLNVAL))
+		throw std::system_error(EIO, std::generic_category(),
+					"poll KFI events");
+	return (descriptor.revents & (POLLIN | POLLHUP)) != 0;
+}
+
+std::vector<kfi_event> Client::read_events(std::size_t max_events) const
+{
+	constexpr std::size_t max_event_batch = 256;
+	if (!max_events || max_events > max_event_batch ||
+	    max_events > std::numeric_limits<std::size_t>::max() / sizeof(kfi_event))
+		throw std::invalid_argument("invalid event read capacity");
+
+	std::vector<kfi_event> events(max_events);
+	const ssize_t bytes = detail::syscalls().read(
+		fd_, events.data(), events.size() * sizeof(kfi_event));
+	if (bytes == -1)
+		throw std::system_error(errno, std::generic_category(), "read KFI events");
+	if (bytes == 0)
+		return {};
+	if (bytes < 0 || static_cast<std::size_t>(bytes) % sizeof(kfi_event))
+		throw std::runtime_error("kernel returned a malformed event stream");
+
+	events.resize(static_cast<std::size_t>(bytes) / sizeof(kfi_event));
+	for (const auto &event : events) {
+		if (event.size != sizeof(kfi_event))
+			throw std::runtime_error("kernel returned an unsupported event size");
+	}
+	return events;
+}
+
 void Client::hide_module() const
 {
 	kfi_visibility_control request{};
@@ -345,6 +400,28 @@ void Client::hide_module() const
 const ResolvedEndpoint &Client::endpoint() const noexcept
 {
 	return endpoint_;
+}
+
+const char *event_type_name(std::uint16_t type) noexcept
+{
+	switch (type) {
+	case KFI_EVENT_TYPE_SESSION_OPENED:
+		return "session-opened";
+	case KFI_EVENT_TYPE_SESSION_CLOSED:
+		return "session-closed";
+	case KFI_EVENT_TYPE_PROCESS_EXIT:
+		return "process-exit";
+	case KFI_EVENT_TYPE_THREAD_CREATE:
+		return "thread-create";
+	case KFI_EVENT_TYPE_THREAD_EXIT:
+		return "thread-exit";
+	case KFI_EVENT_TYPE_BREAKPOINT_HIT:
+		return "breakpoint-hit";
+	case KFI_EVENT_TYPE_WATCHPOINT_HIT:
+		return "watchpoint-hit";
+	default:
+		return "unknown";
+	}
 }
 
 } // namespace kfi

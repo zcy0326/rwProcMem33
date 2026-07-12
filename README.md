@@ -1,3 +1,15 @@
+# KFI unified backend (development branch)
+
+The `kernel/`, `include/uapi/`, and `user/` directories contain the new KFI
+backend. ABI 1.3 currently includes process sessions, bounded memory I/O, maps,
+threads, optional visibility controls, and a per-client event ring exposed by
+`read`/`poll`. Userspace commands include `version`, `caps`, `runtime`,
+`threads PID`, `maps PID`, `event-stats`, and `events PID`.
+
+Kernel sources are source-complete for these milestones but have not yet been
+built or loaded against a matching Android/GKI tree. Legacy modules below are
+retained as migration references.
+
 # 驱动1名称：Linux ARM64内核硬件进程内存读写驱动39
 本驱动支持所有能解锁BL的手机，无论小米、黑鲨、红魔、ROG、一加、三星、摩托罗拉等等，并且不需要手机厂商开放内核源码。只需要手动修改五六处地方，就可以跑在任意机型的内核上！具体修改过程不再本文章的论述中。本文章仅提供驱动源代码。
 
@@ -49,7 +61,7 @@
   * **3.修复驱动maps列表获取的一些bug**
   * **4.修复android15兼容性问题**
   * **5.新增一种驱动隐蔽通信手段**
-  
+
 2025-5（读写驱动）：
   * **1.支持Linux6.6**
 

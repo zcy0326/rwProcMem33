@@ -9,6 +9,7 @@
 #include <linux/slab.h>
 
 #include "kfi_internal.h"
+#include "kfi_event.h"
 #include "kfi_session.h"
 #include "kfi_uapi.h"
 
@@ -73,7 +74,7 @@ static struct kfi_session *kfi_session_remove_locked(
 	return session;
 }
 
-static int kfi_session_remove(struct kfi_client *client, u64 id)
+static int kfi_session_remove(struct kfi_client *client, u64 id, bool notify)
 {
 	struct kfi_session *session;
 
@@ -82,6 +83,16 @@ static int kfi_session_remove(struct kfi_client *client, u64 id)
 	mutex_unlock(&client->lock);
 	if (!session)
 		return -ENOENT;
+	if (notify) {
+		struct kfi_event event = {
+			.type = KFI_EVENT_TYPE_SESSION_CLOSED,
+			.session_id = session->id,
+			.pid = session->target_tgid,
+			.tid = session->opened_pid,
+		};
+
+		(void)kfi_event_emit(client, &event);
+	}
 	kfi_session_put(session);
 	return 0;
 }
@@ -122,6 +133,7 @@ int kfi_session_ioctl_open(struct kfi_client *client, void __user *argument)
 	atomic_set(&session->closing, 0);
 	session->tgid = get_task_pid(task, PIDTYPE_TGID);
 	session->opened_pid = request.pid;
+	session->target_tgid = task_tgid_nr(task);
 	put_task_struct(task);
 	if (!session->tgid) {
 		kfi_session_put(session);
@@ -149,8 +161,18 @@ int kfi_session_ioctl_open(struct kfi_client *client, void __user *argument)
 
 	request.session_id = session->id;
 	error = kfi_uapi_copy_response(argument, &request, sizeof(request));
-	if (error)
-		kfi_session_remove(client, session->id);
+	if (error) {
+		kfi_session_remove(client, session->id, false);
+	} else {
+		struct kfi_event event = {
+			.type = KFI_EVENT_TYPE_SESSION_OPENED,
+			.session_id = session->id,
+			.pid = session->target_tgid,
+			.tid = session->opened_pid,
+		};
+
+		(void)kfi_event_emit(client, &event);
+	}
 	return error;
 }
 
@@ -168,7 +190,7 @@ int kfi_session_ioctl_close(struct kfi_client *client, void __user *argument)
 				       ARRAY_SIZE(request.reserved)))
 		return -EINVAL;
 
-	error = kfi_session_remove(client, request.session_id);
+	error = kfi_session_remove(client, request.session_id, true);
 	if (error)
 		return error;
 	request.session_id = 0;

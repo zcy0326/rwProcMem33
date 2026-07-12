@@ -25,6 +25,9 @@ static_assert(sizeof(kfi_thread_entry) == 64, "unexpected thread layout");
 static_assert(sizeof(kfi_map_entry) == 320, "unexpected map layout");
 static_assert(sizeof(kfi_visibility_control) == 64,
 	      "unexpected visibility layout");
+static_assert(sizeof(kfi_event) == 128, "unexpected event layout");
+static_assert(sizeof(kfi_event_stats) == 64,
+	      "unexpected event stats layout");
 
 class MemoryTransferError final : public std::system_error {
 public:
@@ -93,6 +96,9 @@ public:
 	std::size_t write_memory(std::uint64_t session_id,
 				 std::uint64_t remote_address, const void *buffer,
 				 std::size_t size) const;
+	kfi_event_stats event_stats() const;
+	bool wait_for_events(int timeout_ms) const;
+	std::vector<kfi_event> read_events(std::size_t max_events = 64) const;
 	void hide_module() const;
 
 	const ResolvedEndpoint &endpoint() const noexcept;
@@ -101,6 +107,8 @@ private:
 	int fd_ = -1;
 	ResolvedEndpoint endpoint_{EndpointKind::Device, {}, {}};
 };
+
+const char *event_type_name(std::uint16_t type) noexcept;
 
 } // namespace kfi
 

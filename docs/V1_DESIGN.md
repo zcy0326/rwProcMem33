@@ -17,7 +17,7 @@ hardware-breakpoint code out of the two upstream modules.
 
 ## Implemented slice
 
-- Versioned UAPI 1.1 with compile-time layout assertions.
+- Versioned UAPI 1.3 with compile-time layout assertions.
 - `GET_VERSION` and accurate capability negotiation.
 - `GET_RUNTIME_INFO` for release, machine, page size, profile, and build flags.
 - Central compatibility wrappers for version-sensitive kernel APIs and compat
@@ -27,7 +27,8 @@ hardware-breakpoint code out of the two upstream modules.
   a default-off, build-specific procfs endpoint.
 - C++17 endpoint abstraction and CLI selection through `--endpoint` and
   `KFI_ENDPOINT`.
-- CLI commands: `endpoint-info`, `version`, `caps`, `runtime`, and `attach`.
+- CLI commands include endpoint/runtime inspection, attach, maps, threads,
+  event statistics, and one-shot event reads.
 - Device probe, module verifier, portability documentation, and ARM64 CLI CI.
 
 Capability bits are only advertised after their implementation is wired into
@@ -49,5 +50,5 @@ through the KFI ABI.
 2. Add session lookup/refcount helpers and bounded memory I/O.
 3. Add maps and thread enumeration.
 4. Replace global breakpoint storage with client-owned opaque IDs.
-5. Add a preallocated event ring and activate `read()`/`poll()`.
+5. Feed hardware breakpoint hits into the completed preallocated event ring.
 6. Add per-breakpoint actions after event delivery is stable.

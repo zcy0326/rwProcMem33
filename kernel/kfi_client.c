@@ -10,6 +10,7 @@
 #include <linux/uaccess.h>
 
 #include "kfi_internal.h"
+#include "kfi_event.h"
 #include "kfi_maps.h"
 #include "kfi_memory.h"
 #include "kfi_task.h"
@@ -29,6 +30,7 @@ int kfi_client_create(struct file *file,
 		      enum kfi_transport_kind transport)
 {
 	struct kfi_client *client;
+	int error;
 
 	if (!capable(CAP_SYS_PTRACE))
 		return -EPERM;
@@ -44,6 +46,12 @@ int kfi_client_create(struct file *file,
 	client->transport = transport;
 	mutex_init(&client->lock);
 	idr_init(&client->sessions);
+	error = kfi_event_client_init(client);
+	if (error) {
+		idr_destroy(&client->sessions);
+		kfree(client);
+		return error;
+	}
 	file->private_data = client;
 	return 0;
 }
@@ -58,9 +66,11 @@ void kfi_client_destroy(struct file *file)
 	mutex_lock(&client->lock);
 	client->closing = true;
 	mutex_unlock(&client->lock);
+	kfi_event_client_shutdown(client);
 	kfi_session_shutdown_all(client);
 
 	file->private_data = NULL;
+	kfi_event_client_destroy(client);
 	kfree(client);
 }
 
@@ -125,9 +135,11 @@ static long kfi_get_caps(unsigned long arg)
 			 kfi_memory_capabilities() |
 			 kfi_maps_capabilities() |
 			 kfi_task_capabilities() |
+			 kfi_event_capabilities() |
 			 kfi_visibility_capabilities(),
 		.max_sessions = KFI_MAX_SESSIONS,
 		.max_io_size = KFI_MAX_IO_SIZE,
+		.event_size = sizeof(struct kfi_event),
 	};
 
 	return kfi_uapi_copy_response((void __user *)arg, &caps, sizeof(caps));
@@ -217,6 +229,8 @@ long kfi_dispatch_ioctl(struct kfi_client *client, unsigned int cmd,
 		return kfi_maps_ioctl_enumerate(client, (void __user *)arg);
 	case KFI_IOC_HIDE_MODULE:
 		return kfi_hide_module(arg);
+	case KFI_IOC_GET_EVENT_STATS:
+		return kfi_event_ioctl_get_stats(client, (void __user *)arg);
 	default:
 		return -ENOTTY;
 	}

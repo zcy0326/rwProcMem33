@@ -5,6 +5,7 @@
 #include <linux/version.h>
 
 #include "kfi_internal.h"
+#include "kfi_event.h"
 #include "kfi_maps.h"
 #include "kfi_task.h"
 #include "kfi_memory.h"
@@ -59,7 +60,8 @@ void kfi_runtime_get(struct kfi_runtime_info *info)
 		KFI_CAP_OPAQUE_SESSIONS | KFI_CAP_RUNTIME_INFO |
 		KFI_CAP_SESSION_REFS | info->transport_caps |
 		kfi_memory_capabilities() | kfi_maps_capabilities() |
-		kfi_task_capabilities() | kfi_visibility_capabilities();
+		kfi_task_capabilities() | kfi_event_capabilities() |
+		kfi_visibility_capabilities();
 	strscpy(info->release, name->release, sizeof(info->release));
 	strscpy(info->machine, name->machine, sizeof(info->machine));
 	strscpy(info->profile, KFI_PROFILE_NAME, sizeof(info->profile));

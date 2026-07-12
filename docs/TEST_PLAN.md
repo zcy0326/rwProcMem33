@@ -14,7 +14,8 @@ PYTHONPATH=. python3 -m unittest discover -s tests/tools -p 'test_*.py'
 Current userspace coverage includes endpoint normalization, environment
 selection, RAII session lifetime, automatic memory chunking, partial-progress
 errors, UAPI layouts, enumeration page accumulation, invalid counts, unknown
-flags, and non-progressing cursors.
+flags, non-progressing cursors, event stats, poll readiness, event batches,
+and malformed event streams.
 
 ## Target-kernel tests
 
@@ -35,9 +36,15 @@ available:
    deleted, and long-path VMAs.
 9. Map pagination makes progress from address zero through `END`, including a
    process whose map layout changes between requests.
-10. Character and proc transports return identical ioctl behavior.
-11. Failure of optional proc filtering leaves the private transport usable.
-12. Repeated load/open/attach/read/maps/threads/close/unload cycles pass
+10. Session open and explicit close produce ordered lifecycle events.
+11. Blocking and nonblocking event reads return only complete 128-byte records.
+12. `poll`/`epoll` report readable and shutdown states correctly.
+13. Filling the ring increments `lost`, creates observable sequence gaps, and
+    does not allocate in the producer path.
+14. Concurrent readers do not duplicate or reorder events.
+15. Character and proc transports return identical ioctl and event behavior.
+16. Failure of optional proc filtering leaves the private transport usable.
+17. Repeated load/open/attach/read/maps/threads/events/close/unload cycles pass
     kmemleak, KASAN, and lockdep checks.
-13. 32-bit compat clients observe the same fixed-width UAPI layouts.
-14. Probe/load/ioctl/unload succeeds on every supported KMI profile.
+18. 32-bit compat clients observe the same fixed-width UAPI layouts.
+19. Probe/load/ioctl/read/poll/unload succeeds on every supported KMI profile.

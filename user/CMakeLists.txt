@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(kfi_user VERSION 1.2.0 LANGUAGES CXX)
+project(kfi_user VERSION 1.3.0 LANGUAGES CXX)
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID)
   message(FATAL_ERROR "KFI userspace requires Linux or Android")
@@ -43,4 +43,9 @@ if(BUILD_TESTING)
   target_link_libraries(kfi-enumerate-test PRIVATE kfi)
   target_compile_options(kfi-enumerate-test PRIVATE -Wall -Wextra -Wpedantic)
   add_test(NAME enumerate COMMAND kfi-enumerate-test)
+
+  add_executable(kfi-event-test tests/event_test.cpp)
+  target_link_libraries(kfi-event-test PRIVATE kfi)
+  target_compile_options(kfi-event-test PRIVATE -Wall -Wextra -Wpedantic)
+  add_test(NAME event COMMAND kfi-event-test)
 endif()

@@ -27,8 +27,8 @@ The optional build flag creates a build-specific endpoint:
 
 It is a normal visible procfs entry with mode `0600`. It does not hook procfs
 enumeration or modify directory callbacks. Control operations use the same
-versioned ioctls as `/dev/kfi`. `read()` and `poll()` are reserved for the event
-ring milestone and currently report that event delivery is unavailable.
+versioned ioctls as `/dev/kfi`. `read()` returns fixed-size event records and `poll()`/`epoll()` report event
+readiness and client shutdown.
 
 Generate matching kernel and userspace configuration before enabling it:
 
@@ -73,6 +73,6 @@ It never scans `/proc` to guess a generated endpoint name.
 ```text
 open/release  client lifetime
 ioctl         versioned control commands
-read          asynchronous events (future event-ring milestone)
-poll/epoll    event readiness (future event-ring milestone)
+read          batched fixed-size asynchronous events
+poll/epoll    event readiness and shutdown
 ```

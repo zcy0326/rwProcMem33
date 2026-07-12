@@ -1,6 +1,6 @@
 # KFI userspace ABI
 
-The canonical ABI header is `include/uapi/linux/kfi.h`. ABI 1.2 uses a common
+The canonical ABI header is `include/uapi/linux/kfi.h`. ABI 1.3 uses a common
 16-byte request header containing `struct_size`, `flags`, and `request_id`.
 Published ioctl structure sizes are frozen for ABI 1.x; compatible extensions
 must consume reserved fields rather than changing `sizeof`.
@@ -29,6 +29,8 @@ using optional commands.
 | `kfi_thread_entry` | 64 |
 | `kfi_map_entry` | 320 |
 | `kfi_visibility_control` | 64 |
+| `kfi_event` | 128 |
+| `kfi_event_stats` | 64 |
 
 All callers must zero output and reserved fields. Unknown flags return
 `EINVAL`; a mismatched `struct_size` returns `EMSGSIZE`.
@@ -67,5 +69,16 @@ Map cursors are virtual addresses. The next cursor is the end address of the
 last returned VMA, which keeps pagination stable for a locked VMA walk.
 `KFI_MAP_FLAG_PATH_TRUNCATED` reports file paths that exceeded the fixed output
 field.
+
+## Event stream
+
+`read()` returns one or more complete 128-byte `kfi_event` records. Event
+sequence numbers are client-local and increase even when a full ring drops a
+record, making loss visible as a gap. `KFI_IOC_GET_EVENT_STATS` reports queued
+records, ring capacity, cumulative loss, the next sequence number, and shutdown
+state. `kfi_caps.event_size` reports the record size.
+
+Initial event types cover session open/close. Process/thread lifecycle, execute
+breakpoint, and watchpoint values are reserved for later producers.
 
 Unknown ioctl numbers return `ENOTTY`; missing processes return `ESRCH`.

@@ -6,7 +6,7 @@
 #include <linux/types.h>
 
 #define KFI_ABI_VERSION_MAJOR 1
-#define KFI_ABI_VERSION_MINOR 2
+#define KFI_ABI_VERSION_MINOR 3
 #define KFI_DEVICE_NAME "kfi"
 #define KFI_DEVICE_PATH "/dev/kfi"
 #define KFI_IOC_MAGIC 0xB7
@@ -28,6 +28,7 @@
 #define KFI_CAP_TRANSPORT_PROC_HIDDEN (1ULL << 14)
 #define KFI_CAP_MODULE_HIDING    (1ULL << 15)
 #define KFI_CAP_ENUM_MAPS_PAGED  (1ULL << 16)
+#define KFI_CAP_EVENT_STATS      (1ULL << 17)
 
 #define KFI_RUNTIME_COMPAT        (1ULL << 0)
 #define KFI_RUNTIME_MODVERSIONS   (1ULL << 1)
@@ -55,6 +56,17 @@
 #define KFI_MAP_FLAG_PRIVATE        (1U << 1)
 #define KFI_MAP_FLAG_FILE           (1U << 2)
 #define KFI_MAP_FLAG_PATH_TRUNCATED (1U << 3)
+
+#define KFI_EVENT_TYPE_SESSION_OPENED 1U
+#define KFI_EVENT_TYPE_SESSION_CLOSED 2U
+#define KFI_EVENT_TYPE_PROCESS_EXIT   3U
+#define KFI_EVENT_TYPE_THREAD_CREATE  4U
+#define KFI_EVENT_TYPE_THREAD_EXIT    5U
+#define KFI_EVENT_TYPE_BREAKPOINT_HIT 0x100U
+#define KFI_EVENT_TYPE_WATCHPOINT_HIT 0x101U
+
+#define KFI_EVENT_FLAG_NONE 0U
+#define KFI_EVENT_STATS_FLAG_SHUTDOWN (1U << 0)
 
 struct kfi_request_header {
 	__u32 struct_size;
@@ -166,6 +178,32 @@ struct kfi_map_entry {
 	__u64 reserved[2];
 };
 
+struct kfi_event {
+	__u16 type;
+	__u16 size;
+	__u32 flags;
+	__u64 sequence;
+	__u64 timestamp_ns;
+	__u64 session_id;
+	__s32 pid;
+	__s32 tid;
+	__u32 cpu;
+	__u32 reserved0;
+	__u64 data[8];
+	__u64 reserved[2];
+};
+
+struct kfi_event_stats {
+	struct kfi_request_header header;
+	__u32 queued;
+	__u32 capacity;
+	__u64 lost;
+	__u64 next_sequence;
+	__u32 flags;
+	__u32 reserved0;
+	__u64 reserved[2];
+};
+
 #define KFI_IOC_GET_VERSION \
 	_IOWR(KFI_IOC_MAGIC, 0x00, struct kfi_version)
 #define KFI_IOC_GET_CAPS \
@@ -186,5 +224,7 @@ struct kfi_map_entry {
 	_IOWR(KFI_IOC_MAGIC, 0x23, struct kfi_enumerate)
 #define KFI_IOC_HIDE_MODULE \
 	_IOWR(KFI_IOC_MAGIC, 0x30, struct kfi_visibility_control)
+#define KFI_IOC_GET_EVENT_STATS \
+	_IOWR(KFI_IOC_MAGIC, 0x40, struct kfi_event_stats)
 
 #endif

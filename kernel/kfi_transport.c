@@ -8,6 +8,7 @@
 #endif
 
 #include "kfi_internal.h"
+#include "kfi_event.h"
 #include "kfi_transport.h"
 
 static bool kfi_char_active;
@@ -59,18 +60,23 @@ long kfi_transport_compat_ioctl(struct file *file, unsigned int cmd,
 ssize_t kfi_transport_read(struct file *file, char __user *buffer,
 			   size_t size, loff_t *offset)
 {
-	(void)file;
-	(void)buffer;
-	(void)size;
+	struct kfi_client *client = file->private_data;
+
 	(void)offset;
-	return -EOPNOTSUPP;
+	if (!client)
+		return -ENODEV;
+	if (!kfi_client_authorized(client))
+		return -EPERM;
+	return kfi_event_read(file, buffer, size);
 }
 
 __poll_t kfi_transport_poll(struct file *file, poll_table *wait)
 {
-	(void)file;
-	(void)wait;
-	return EPOLLERR;
+	struct kfi_client *client = file->private_data;
+
+	if (!client || !kfi_client_authorized(client))
+		return EPOLLERR;
+	return kfi_event_poll(file, wait);
 }
 
 u64 kfi_transport_capabilities(void)

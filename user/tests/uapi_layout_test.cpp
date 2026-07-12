@@ -23,6 +23,11 @@ static_assert(sizeof(kfi_thread_entry) == 64);
 static_assert(offsetof(kfi_thread_entry, comm) == 16);
 static_assert(sizeof(kfi_map_entry) == 320);
 static_assert(offsetof(kfi_map_entry, path) == 48);
+static_assert(sizeof(kfi_event) == 128);
+static_assert(offsetof(kfi_event, sequence) == 8);
+static_assert(offsetof(kfi_event, data) == 48);
+static_assert(sizeof(kfi_event_stats) == 64);
+static_assert(offsetof(kfi_event_stats, lost) == 24);
 
 int main()
 {

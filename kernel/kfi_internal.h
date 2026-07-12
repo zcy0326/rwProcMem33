@@ -8,6 +8,8 @@
 #include <linux/kref.h>
 #include <linux/mutex.h>
 #include <linux/pid.h>
+#include <linux/spinlock.h>
+#include <linux/wait.h>
 #include <linux/types.h>
 
 #include "../include/uapi/linux/kfi.h"
@@ -15,9 +17,11 @@
 #include "kfi_transport.h"
 #include "kfi_visibility.h"
 
-#define KFI_MODULE_VERSION 0x00010200U
+#define KFI_MODULE_VERSION 0x00010300U
 #define KFI_MAX_SESSIONS 4096U
 #define KFI_MAX_IO_SIZE (1024U * 1024U)
+#define KFI_EVENT_RING_CAPACITY 256U
+#define KFI_EVENT_READ_MAX 256U
 
 struct kfi_session {
 	struct kref reference;
@@ -25,6 +29,7 @@ struct kfi_session {
 	u64 id;
 	struct pid *tgid;
 	pid_t opened_pid;
+	pid_t target_tgid;
 };
 
 struct kfi_client {
@@ -37,6 +42,18 @@ struct kfi_client {
 	struct idr sessions;
 	u32 session_generation;
 	bool closing;
+
+	struct kfi_event *event_ring;
+	u32 event_capacity;
+	u32 event_head;
+	u32 event_tail;
+	u32 event_count;
+	u64 event_sequence;
+	u64 event_lost;
+	bool event_shutdown;
+	spinlock_t event_lock;
+	struct mutex event_read_lock;
+	wait_queue_head_t event_wait;
 };
 
 int kfi_client_create(struct file *file,
@@ -59,5 +76,7 @@ static_assert(sizeof(struct kfi_enumerate) == 64);
 static_assert(sizeof(struct kfi_thread_entry) == 64);
 static_assert(sizeof(struct kfi_map_entry) == 320);
 static_assert(sizeof(struct kfi_visibility_control) == 64);
+static_assert(sizeof(struct kfi_event) == 128);
+static_assert(sizeof(struct kfi_event_stats) == 64);
 
 #endif

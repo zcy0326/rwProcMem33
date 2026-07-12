@@ -2,7 +2,7 @@
 
 | Area | Status | Verification | Pending |
 |---|---|---|---|
-| ABI 1.2 and runtime info | Implemented | C/C++ layout assertions; userspace build | Target kernel build and device test |
+| ABI 1.3 and runtime info | Implemented | C/C++ layout assertions; userspace build | Target kernel build and device test |
 | Per-open client and opaque sessions | Implemented | Static review; userspace RAII lifecycle tests | Concurrent kernel/device tests |
 | Shared transport dispatcher | Implemented | Static review | Target kernel build |
 | Character-device transport | Implemented | Userspace endpoint tests | Android device-node test |
@@ -11,7 +11,8 @@
 | Process memory backend | Kernel and C++ initial implementation | UAPI wiring; automatic chunking and partial-progress tests | Target kernel build and device read/write test |
 | Maps and threads | Source complete for initial paged enumeration | ABI/layout assertions; pagination tests; SDK and CLI wiring; static review | Target kernel build and live-process pagination tests |
 | Module/proc visibility controls | Implemented | UAPI assertions; static review | Target kernel/device test; proc hook portability |
-| Hardware breakpoints and events | Not started | None | Next V1 milestone |
+| Event ring and read/poll transport | Source complete | Fixed-size ABI assertions; userspace poll/read/stats tests; session lifecycle producers | Target kernel build, overflow, blocking read, and epoll tests |
+| Hardware breakpoints | Not started | None | Next V1 milestone |
 
 Kernel sources in this branch have not been built against a matching
 Android/GKI tree and have not been validated with `insmod` on a device.

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <poll.h>
 #include <stdexcept>
 #include <vector>
 
@@ -43,6 +44,17 @@ int mock_dup(int)
 int mock_close(int)
 {
 	++state.close_fd_calls;
+	return 0;
+}
+
+ssize_t mock_read(int, void *, std::size_t)
+{
+	errno = EAGAIN;
+	return -1;
+}
+
+int mock_poll(struct pollfd *, nfds_t, int)
+{
 	return 0;
 }
 
@@ -91,6 +103,8 @@ const kfi::detail::Syscalls mock_syscalls{
 	&mock_ioctl,
 	&mock_dup,
 	&mock_close,
+	&mock_read,
+	&mock_poll,
 };
 
 } // namespace
