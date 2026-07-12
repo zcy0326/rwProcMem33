@@ -1,27 +1,43 @@
 # KFI V1 test plan
 
-Run these tests on an isolated target kernel built with KASAN and lockdep when
-available.
+## Tests available without a kernel module
 
-1. A caller without `CAP_SYS_PTRACE` cannot open `/dev/kfi`.
-2. `kfi version` returns ABI 1.1 and a nonzero client ID.
-3. Two open file descriptors receive different client IDs.
-4. `kfi caps` advertises client isolation, opaque sessions, and runtime info.
-5. `kfi attach <live-pid>` returns a nonzero session ID.
-6. Attaching a missing PID returns `ESRCH`.
-7. Closing a session twice returns `ENOENT`.
-8. A session ID created by client A cannot be closed by client B.
-9. Exiting without explicit close releases every session without leaks.
-10. Repeated open/attach/close cycles pass kmemleak, KASAN, and lockdep checks.
-11. Nonzero request reserved fields and unknown flags return `EINVAL`.
-12. `kfi runtime` matches the target release, machine, page size, and profile.
-13. A 32-bit compat client receives the same fixed-width UAPI layouts.
-14. Character and proc endpoints return identical version, capability, runtime,
-    session, and error behavior.
-15. The proc endpoint has mode `0600`, supports multiple independent opens, and
-    is removed cleanly on unload.
-16. A failed optional transport registration does not disable a successfully
-    registered transport, and `GET_CAPS` reports only active transports.
-17. `verify_module.py` rejects wrong-machine, wrong-ABI, missing-vermagic, and
-    denied-symbol artifacts.
-18. Probe/load/ioctl/unload succeeds on every supported KMI build target.
+Run from the repository root:
+
+```sh
+cmake -S user -B build/user -DCMAKE_BUILD_TYPE=Release
+cmake --build build/user --parallel
+ctest --test-dir build/user --output-on-failure
+PYTHONPATH=. python3 -m unittest discover -s tests/tools -p 'test_*.py'
+```
+
+Current userspace coverage includes endpoint normalization, environment
+selection, RAII session lifetime, automatic memory chunking, partial-progress
+errors, UAPI layouts, enumeration page accumulation, invalid counts, unknown
+flags, and non-progressing cursors.
+
+## Target-kernel tests
+
+Run on an isolated matching Android/GKI kernel, with KASAN and lockdep when
+available:
+
+1. A caller without `CAP_SYS_PTRACE` cannot open an endpoint.
+2. Version/capability/runtime queries are internally consistent.
+3. Session IDs are isolated by client and stale IDs return `ENOENT`.
+4. Concurrent memory operations and session close do not trigger UAF or leaks.
+5. Memory operations cover cross-page, inaccessible, partially mapped, and
+   exited targets while reporting accurate progress.
+6. Thread enumeration includes the leader exactly once and paginates processes
+   with more than `KFI_ENUM_MAX_ENTRIES` threads.
+7. Thread creation and exit during enumeration do not crash the kernel; results
+   are documented as best effort.
+8. Map enumeration covers anonymous, file-backed, shared/private, executable,
+   deleted, and long-path VMAs.
+9. Map pagination makes progress from address zero through `END`, including a
+   process whose map layout changes between requests.
+10. Character and proc transports return identical ioctl behavior.
+11. Failure of optional proc filtering leaves the private transport usable.
+12. Repeated load/open/attach/read/maps/threads/close/unload cycles pass
+    kmemleak, KASAN, and lockdep checks.
+13. 32-bit compat clients observe the same fixed-width UAPI layouts.
+14. Probe/load/ioctl/unload succeeds on every supported KMI profile.

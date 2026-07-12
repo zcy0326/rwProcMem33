@@ -1,67 +1,71 @@
 # KFI userspace ABI
 
-The canonical ABI header is `include/uapi/linux/kfi.h`. All structures are
-fixed-size and include reserved fields that callers must set to zero.
+The canonical ABI header is `include/uapi/linux/kfi.h`. ABI 1.2 uses a common
+16-byte request header containing `struct_size`, `flags`, and `request_id`.
+Published ioctl structure sizes are frozen for ABI 1.x; compatible extensions
+must consume reserved fields rather than changing `sizeof`.
 
 ## Negotiation
 
-Clients open either `/dev/kfi` or a configured private procfs endpoint, then
-call:
+Clients open `/dev/kfi` or a configured private procfs endpoint, then call:
 
 1. `KFI_IOC_GET_VERSION`
 2. `KFI_IOC_GET_CAPS`
+3. `KFI_IOC_GET_RUNTIME_INFO`
 
-ABI 1.2 adds request headers to every command, `KFI_IOC_GET_RUNTIME_INFO`,
-and `KFI_IOC_HIDE_MODULE`. Runtime information reports the kernel release,
-machine, page size, compiled profile, active capabilities, and transport
-capabilities. The major ABI version must match. Clients must test capability
-bits before using optional commands.
+The major ABI version must match. Clients must test capability bits before
+using optional commands.
 
-The kernel and C++ SDK assert these layouts at compile time: `kfi_version` 72
-bytes, `kfi_caps` 128 bytes, `kfi_open_process` 64 bytes,
-`kfi_close_session` 64 bytes, `kfi_runtime_info` 256 bytes,
-`kfi_memory_io` 64 bytes, `kfi_visibility_control` 64 bytes,
-`kfi_enumerate` 64 bytes, `kfi_thread_entry` 64 bytes, and `kfi_map_entry` 320 bytes.
+| Structure | Size |
+|---|---:|
+| `kfi_request_header` | 16 |
+| `kfi_version` | 72 |
+| `kfi_caps` | 128 |
+| `kfi_open_process` | 64 |
+| `kfi_close_session` | 64 |
+| `kfi_runtime_info` | 256 |
+| `kfi_memory_io` | 64 |
+| `kfi_enumerate` | 64 |
+| `kfi_thread_entry` | 64 |
+| `kfi_map_entry` | 320 |
+| `kfi_visibility_control` | 64 |
+
+All callers must zero output and reserved fields. Unknown flags return
+`EINVAL`; a mismatched `struct_size` returns `EMSGSIZE`.
 
 ## Transport capabilities
 
 `KFI_CAP_TRANSPORT_CHAR` and `KFI_CAP_TRANSPORT_PROC_PRIVATE` report transports
-that registered successfully for the running module. When the private proc
-transport is active, `KFI_CAP_TRANSPORT_PROC_HIDDEN` confirms that its generated
-procfs directory is hidden from root directory listings. `KFI_CAP_MODULE_HIDING`
-indicates support for `KFI_IOC_HIDE_MODULE`. Runtime build flags report which
-transports were compiled. The two values may differ when an optional transport
-fails during initialization. Both endpoints use the same ioctl numbers and
-structure layouts.
+that registered successfully. `KFI_CAP_TRANSPORT_PROC_HIDDEN` is reported only
+when the optional procfs enumeration filter is active.
 
 ## Session lifecycle
 
 `KFI_IOC_OPEN_PROCESS` accepts a positive PID and returns an opaque
-`session_id`. The ID is valid only on the file descriptor that created it.
-`KFI_IOC_CLOSE_SESSION` releases it. Closing the descriptor releases every
-remaining session. `KFI_IOC_HIDE_MODULE` accepts a
-`kfi_visibility_control` request with `KFI_VISIBILITY_FLAG_HIDE_MODULE` and
-removes the loaded KFI module from the module list and sysfs representation.
+`session_id`. IDs are scoped to the client associated with the opened file.
+Sessions use kernel references so in-flight operations can finish while another
+thread closes the ID.
 
-`KFI_IOC_READ_MEMORY` and `KFI_IOC_WRITE_MEMORY` use the session ID together
-with a remote address, a userspace buffer pointer, and a bounded request size.
-The kernel returns the completed byte count in `completed_size`; a successful
-partial transfer is reported with a zero ioctl return value. The current
-maximum request size is exposed as `kfi_caps.max_io_size`.
+## Memory transfer
 
+`KFI_IOC_READ_MEMORY` and `KFI_IOC_WRITE_MEMORY` combine a session ID, remote
+address, userspace buffer, requested byte count, and completed byte count. Each
+ioctl is bounded by `kfi_caps.max_io_size`; the C++ SDK splits larger requests.
+`MemoryTransferError` preserves cumulative progress on failure.
 
-## Process layout enumeration
+## Paged enumeration
 
-`KFI_IOC_ENUM_THREADS` and `KFI_IOC_ENUM_MAPS` use the fixed-size
-`kfi_enumerate` request. The caller supplies an output array, its capacity,
-and a cursor. The kernel returns the number of entries, a next cursor, and
-`KFI_ENUM_RESULT_END` when enumeration is complete. A request is limited to
-`KFI_ENUM_MAX_ENTRIES`; userspace repeats requests until the end flag is set.
+`KFI_IOC_ENUM_THREADS` and `KFI_IOC_ENUM_MAPS` use `kfi_enumerate`.
+`capacity` is limited to `KFI_ENUM_MAX_ENTRIES`; `returned` records the number
+of entries copied; `next_cursor` is passed into the next request.
+`KFI_ENUM_RESULT_END` terminates the sequence.
 
-Thread cursors are ordinal positions in the thread group. Map cursors are
-virtual addresses and advance to the end of the last returned VMA. Both
-enumerations are weakly consistent: concurrent thread or VMA changes may be
-visible between pages, so callers needing a snapshot must suspend the target.
-Unknown ioctl numbers return `-ENOTTY`; unknown flags, nonzero reserved fields,
-and malformed requests return `-EINVAL`;
-missing processes return `-ESRCH`.
+Thread cursors are ordinal and represent a best-effort view while threads are
+created or exit. `KFI_THREAD_FLAG_LEADER` marks the thread-group leader.
+
+Map cursors are virtual addresses. The next cursor is the end address of the
+last returned VMA, which keeps pagination stable for a locked VMA walk.
+`KFI_MAP_FLAG_PATH_TRUNCATED` reports file paths that exceeded the fixed output
+field.
+
+Unknown ioctl numbers return `ENOTTY`; missing processes return `ESRCH`.

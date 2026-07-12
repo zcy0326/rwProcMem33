@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <linux/device.h>
+#include <linux/errno.h>
 #include <linux/mm.h>
+#include <linux/module.h>
 #include <linux/version.h>
 
 #include "kfi_compat.h"
@@ -22,6 +24,7 @@ int kfi_compat_walk_vmas(struct mm_struct *mm, unsigned long start,
 
 	if (!mm || !visitor)
 		return -EINVAL;
+
 	mmap_read_lock(mm);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	{

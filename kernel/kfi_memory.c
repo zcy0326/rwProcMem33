@@ -5,6 +5,7 @@
 #include <linux/sched/mm.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/vmalloc.h>
 
 #include "kfi_internal.h"
 #include "kfi_memory.h"
@@ -53,7 +54,7 @@ static int kfi_memory_transfer(struct kfi_client *client,
 		goto put_session;
 	}
 
-	buffer = kmalloc(KFI_MEMORY_CHUNK_SIZE, GFP_KERNEL);
+	buffer = kvzalloc(KFI_MEMORY_CHUNK_SIZE, GFP_KERNEL);
 	if (!buffer) {
 		result = -ENOMEM;
 		goto put_task;
@@ -63,12 +64,20 @@ static int kfi_memory_transfer(struct kfi_client *client,
 		u32 remaining = request->requested_size - completed;
 		u32 chunk = min_t(u32, remaining, KFI_MEMORY_CHUNK_SIZE);
 		int transferred;
+		unsigned long not_copied;
 
-		if (write && copy_from_user(buffer,
-					    (unsigned char __user *)user_buffer + completed,
-					    chunk)) {
-			result = -EFAULT;
-			break;
+		if (write) {
+			not_copied = copy_from_user(
+				buffer,
+				(unsigned char __user *)user_buffer + completed,
+				chunk);
+			if (not_copied) {
+				chunk -= not_copied;
+				if (!chunk) {
+					result = -EFAULT;
+					break;
+				}
+			}
 		}
 
 		transferred = access_process_vm(
@@ -79,19 +88,24 @@ static int kfi_memory_transfer(struct kfi_client *client,
 			break;
 		}
 
-		if (!write && copy_to_user(
-				      (unsigned char __user *)user_buffer + completed,
-				      buffer, transferred)) {
-			result = -EFAULT;
-			break;
+		if (!write) {
+			not_copied = copy_to_user(
+				(unsigned char __user *)user_buffer + completed,
+				buffer, transferred);
+			completed += transferred - not_copied;
+			if (not_copied) {
+				result = -EFAULT;
+				break;
+			}
+		} else {
+			completed += transferred;
 		}
 
-		completed += transferred;
 		if (transferred != chunk)
 			break;
 	}
 
-	kfree(buffer);
+	kvfree(buffer);
 put_task:
 	put_task_struct(task);
 put_session:

@@ -10,11 +10,27 @@
 namespace kfi {
 namespace {
 
-void validate_absolute_path(const std::string &path, const char *kind)
+void validate_normalized_path(const std::string &path, const char *kind)
 {
 	if (path.empty() || path.front() != '/')
 		throw std::invalid_argument(std::string(kind) +
 					    " endpoint path must be absolute");
+	if (path.find("//") != std::string::npos ||
+	    (path.size() > 1 && path.back() == '/'))
+		throw std::invalid_argument(std::string(kind) +
+					    " endpoint path contains an empty component");
+
+	std::size_t begin = 1;
+	while (begin <= path.size()) {
+		const std::size_t end = path.find('/', begin);
+		const std::string component = path.substr(begin, end - begin);
+		if (component == "." || component == "..")
+			throw std::invalid_argument(std::string(kind) +
+						    " endpoint path is not normalized");
+		if (end == std::string::npos)
+			break;
+		begin = end + 1;
+	}
 }
 
 } // namespace
@@ -31,13 +47,13 @@ Endpoint Endpoint::Auto()
 
 Endpoint Endpoint::Device(std::string path)
 {
-	validate_absolute_path(path, "device");
+	validate_normalized_path(path, "device");
 	return Endpoint(EndpointKind::Device, std::move(path));
 }
 
 Endpoint Endpoint::Proc(std::string path)
 {
-	validate_absolute_path(path, "proc");
+	validate_normalized_path(path, "proc");
 	if (path.rfind("/proc/", 0) != 0)
 		throw std::invalid_argument("proc endpoint must be below /proc");
 	return Endpoint(EndpointKind::Proc, std::move(path));

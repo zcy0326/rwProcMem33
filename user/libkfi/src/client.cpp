@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 #include "kfi/client.hpp"
+#include "kfi/detail/enumerate.hpp"
+#include "kfi/detail/syscalls.hpp"
 
+#include <algorithm>
 #include <cerrno>
 #include <limits>
 #include <stdexcept>
-#include <system_error>
 #include <utility>
 
 #include <fcntl.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
 
 namespace kfi {
 namespace {
@@ -17,69 +17,86 @@ namespace {
 void checked_ioctl(int fd, unsigned long request, void *argument,
 		   const char *operation)
 {
-	if (::ioctl(fd, request, argument) == -1)
+	if (detail::syscalls().ioctl(fd, request, argument) == -1)
 		throw std::system_error(errno, std::generic_category(), operation);
 }
 
 std::size_t transfer_memory(int fd, std::uint64_t session_id,
-				std::uint64_t remote_address, void *buffer,
-				std::size_t size, bool write)
+			    std::uint64_t remote_address, void *buffer,
+			    std::size_t size, std::uint32_t max_io_size,
+			    bool write)
 {
-	if (!buffer || size == 0 || size > std::numeric_limits<std::uint32_t>::max())
-		throw std::invalid_argument("invalid memory transfer buffer or size");
+	if (!session_id || !buffer || size == 0 || max_io_size == 0)
+		throw std::invalid_argument("invalid memory transfer arguments");
+	if (size > std::numeric_limits<std::uint64_t>::max() - remote_address)
+		throw std::overflow_error("remote memory range overflows");
 
-	kfi_memory_io request{};
-	request.header.struct_size = sizeof(request);
-	request.session_id = session_id;
-	request.remote_address = remote_address;
-	request.user_buffer = reinterpret_cast<std::uintptr_t>(buffer);
-	request.requested_size = static_cast<std::uint32_t>(size);
-	checked_ioctl(fd, write ? KFI_IOC_WRITE_MEMORY : KFI_IOC_READ_MEMORY,
-			      &request, write ? "KFI_IOC_WRITE_MEMORY" : "KFI_IOC_READ_MEMORY");
-	return request.completed_size;
-}
+	auto *bytes = static_cast<unsigned char *>(buffer);
+	std::size_t completed = 0;
+	const char *operation = write ? "KFI_IOC_WRITE_MEMORY" :
+				       "KFI_IOC_READ_MEMORY";
 
-template <typename Entry>
-std::vector<Entry> enumerate(int fd, std::uint64_t session_id,
-                             unsigned long command, const char *operation)
-{
-	constexpr std::uint32_t page_capacity = 128;
-	std::vector<Entry> result;
-	std::uint64_t cursor = 0;
-	for (;;) {
-		std::vector<Entry> page(page_capacity);
-		kfi_enumerate request{};
+	while (completed < size) {
+		const std::size_t chunk = std::min<std::size_t>(
+			size - completed, max_io_size);
+		kfi_memory_io request{};
 		request.header.struct_size = sizeof(request);
 		request.session_id = session_id;
-		request.user_buffer = reinterpret_cast<std::uintptr_t>(page.data());
-		request.cursor = cursor;
-		request.capacity = page_capacity;
-		checked_ioctl(fd, command, &request, operation);
-		if (request.returned > page_capacity)
-			throw std::runtime_error("kernel returned an invalid enumeration count");
-		result.insert(result.end(), page.begin(), page.begin() + request.returned);
-		if (request.result_flags & KFI_ENUM_RESULT_END)
-			break;
-		if (!request.returned || request.next_cursor == cursor)
-			throw std::runtime_error("kernel enumeration made no progress");
-		cursor = request.next_cursor;
+		request.remote_address = remote_address + completed;
+		request.user_buffer = reinterpret_cast<std::uintptr_t>(bytes + completed);
+		request.requested_size = static_cast<std::uint32_t>(chunk);
+
+		const int result = detail::syscalls().ioctl(
+			fd, write ? KFI_IOC_WRITE_MEMORY : KFI_IOC_READ_MEMORY,
+			&request);
+		const int saved_errno = errno;
+		const std::size_t chunk_completed =
+			std::min<std::size_t>(request.completed_size, chunk);
+		completed += chunk_completed;
+
+		if (result == -1)
+			throw MemoryTransferError(
+				std::error_code(saved_errno, std::generic_category()),
+				completed, operation);
+		if (chunk_completed == 0)
+			throw MemoryTransferError(
+				std::error_code(EIO, std::generic_category()),
+				completed, operation);
+		if (chunk_completed < chunk)
+			return completed;
 	}
-	return result;
+
+	return completed;
 }
 
 } // namespace
 
-Session::Session(int fd, std::uint64_t id) : fd_(fd), id_(id)
+MemoryTransferError::MemoryTransferError(std::error_code error,
+					 std::size_t completed,
+					 const char *operation)
+	: std::system_error(error, operation), completed_(completed)
+{
+}
+
+std::size_t MemoryTransferError::completed() const noexcept
+{
+	return completed_;
+}
+
+Session::Session(int fd, std::uint64_t id, std::uint32_t max_io_size)
+	: fd_(fd), id_(id), max_io_size_(max_io_size)
 {
 }
 
 Session::~Session()
 {
-	close();
+	close_noexcept();
 }
 
 Session::Session(Session &&other) noexcept
-	: fd_(std::exchange(other.fd_, -1)), id_(std::exchange(other.id_, 0))
+	: fd_(std::exchange(other.fd_, -1)),
+	  id_(std::exchange(other.id_, 0)),
+	  max_io_size_(std::exchange(other.max_io_size_, 0))
 {
 }
 
@@ -87,23 +104,11 @@ Session &Session::operator=(Session &&other) noexcept
 {
 	if (this == &other)
 		return *this;
-	close();
+	close_noexcept();
 	fd_ = std::exchange(other.fd_, -1);
 	id_ = std::exchange(other.id_, 0);
+	max_io_size_ = std::exchange(other.max_io_size_, 0);
 	return *this;
-}
-
-void Session::close() noexcept
-{
-	if (fd_ == -1)
-		return;
-	kfi_close_session request{};
-	request.header.struct_size = sizeof(request);
-	request.session_id = id_;
-	(void)::ioctl(fd_, KFI_IOC_CLOSE_SESSION, &request);
-	::close(fd_);
-	fd_ = -1;
-	id_ = 0;
 }
 
 std::uint64_t Session::id() const noexcept
@@ -111,40 +116,95 @@ std::uint64_t Session::id() const noexcept
 	return id_;
 }
 
+bool Session::valid() const noexcept
+{
+	return fd_ != -1 && id_ != 0;
+}
+
+void Session::close()
+{
+	if (!valid())
+		return;
+
+	kfi_close_session request{};
+	request.header.struct_size = sizeof(request);
+	request.session_id = id_;
+	if (detail::syscalls().ioctl(fd_, KFI_IOC_CLOSE_SESSION, &request) == -1 &&
+	    errno != ENOENT)
+		throw std::system_error(errno, std::generic_category(),
+					"KFI_IOC_CLOSE_SESSION");
+
+	(void)detail::syscalls().close(fd_);
+	fd_ = -1;
+	id_ = 0;
+	max_io_size_ = 0;
+}
+
+void Session::close_noexcept() noexcept
+{
+	if (!valid())
+		return;
+
+	kfi_close_session request{};
+	request.header.struct_size = sizeof(request);
+	request.session_id = id_;
+	(void)detail::syscalls().ioctl(fd_, KFI_IOC_CLOSE_SESSION, &request);
+	(void)detail::syscalls().close(fd_);
+	fd_ = -1;
+	id_ = 0;
+	max_io_size_ = 0;
+}
+
 std::size_t Session::read(std::uint64_t remote_address, void *buffer,
-				std::size_t size) const
+			  std::size_t size) const
 {
 	return transfer(remote_address, buffer, size, false);
 }
 
 std::size_t Session::write(std::uint64_t remote_address, const void *buffer,
-				 std::size_t size) const
+			   std::size_t size) const
 {
 	return transfer(remote_address, const_cast<void *>(buffer), size, true);
 }
 
-std::size_t Session::transfer(std::uint64_t remote_address, void *buffer,
-				      std::size_t size, bool write) const
-{
-	if (fd_ == -1)
-		throw std::system_error(EBADF, std::generic_category(), "closed session");
-	return transfer_memory(fd_, id_, remote_address, buffer, size, write);
-}
-
 std::vector<kfi_thread_entry> Session::threads() const
 {
-	if (fd_ == -1)
-		throw std::system_error(EBADF, std::generic_category(), "closed session");
-	return enumerate<kfi_thread_entry>(fd_, id_, KFI_IOC_ENUM_THREADS,
-					   "KFI_IOC_ENUM_THREADS");
+	if (!valid())
+		throw std::system_error(EBADF, std::generic_category(),
+					"closed session");
+	return detail::enumerate_pages<kfi_thread_entry>(
+		id_, KFI_IOC_ENUM_THREADS, "KFI_IOC_ENUM_THREADS",
+		[this](unsigned long command, void *argument,
+		       const char *operation) {
+			if (detail::syscalls().ioctl(fd_, command, argument) == -1)
+				throw std::system_error(
+					errno, std::generic_category(), operation);
+		});
 }
 
 std::vector<kfi_map_entry> Session::maps() const
 {
-	if (fd_ == -1)
-		throw std::system_error(EBADF, std::generic_category(), "closed session");
-	return enumerate<kfi_map_entry>(fd_, id_, KFI_IOC_ENUM_MAPS,
-					"KFI_IOC_ENUM_MAPS");
+	if (!valid())
+		throw std::system_error(EBADF, std::generic_category(),
+					"closed session");
+	return detail::enumerate_pages<kfi_map_entry>(
+		id_, KFI_IOC_ENUM_MAPS, "KFI_IOC_ENUM_MAPS",
+		[this](unsigned long command, void *argument,
+		       const char *operation) {
+			if (detail::syscalls().ioctl(fd_, command, argument) == -1)
+				throw std::system_error(
+					errno, std::generic_category(), operation);
+		});
+}
+
+std::size_t Session::transfer(std::uint64_t remote_address, void *buffer,
+			      std::size_t size, bool write) const
+{
+	if (!valid())
+		throw std::system_error(EBADF, std::generic_category(),
+					"closed session");
+	return transfer_memory(fd_, id_, remote_address, buffer, size,
+			       max_io_size_, write);
 }
 
 Client::Client() : Client(Endpoint::Auto())
@@ -158,7 +218,7 @@ Client::Client(const std::string &device_path)
 
 Client::Client(const Endpoint &endpoint) : endpoint_(endpoint.resolve())
 {
-	fd_ = ::open(endpoint_.path.c_str(), O_RDWR | O_CLOEXEC);
+	fd_ = detail::syscalls().open(endpoint_.path.c_str(), O_RDWR | O_CLOEXEC);
 	if (fd_ == -1)
 		throw std::system_error(errno, std::generic_category(),
 					"open " + endpoint_.path);
@@ -167,7 +227,7 @@ Client::Client(const Endpoint &endpoint) : endpoint_(endpoint.resolve())
 Client::~Client()
 {
 	if (fd_ != -1)
-		::close(fd_);
+		(void)detail::syscalls().close(fd_);
 }
 
 Client::Client(Client &&other) noexcept
@@ -181,7 +241,7 @@ Client &Client::operator=(Client &&other) noexcept
 	if (this == &other)
 		return *this;
 	if (fd_ != -1)
-		::close(fd_);
+		(void)detail::syscalls().close(fd_);
 	fd_ = std::exchange(other.fd_, -1);
 	endpoint_ = std::move(other.endpoint_);
 	return *this;
@@ -225,17 +285,25 @@ std::uint64_t Client::open_process(std::int32_t pid) const
 Session Client::open_process_session(std::int32_t pid) const
 {
 	const auto id = open_process(pid);
-	const int duplicated_fd = ::fcntl(fd_, F_DUPFD_CLOEXEC, 0);
-	if (duplicated_fd == -1) {
-		const int duplicate_error = errno;
+	try {
+		const auto caps = capabilities();
+		if (!caps.max_io_size)
+			throw std::runtime_error("kernel reported zero max_io_size");
+
+		const int duplicated_fd = detail::syscalls().dup_cloexec(fd_);
+		if (duplicated_fd == -1) {
+			const int saved_errno = errno;
+			throw std::system_error(saved_errno, std::generic_category(),
+						"duplicate KFI session descriptor");
+		}
+		return Session(duplicated_fd, id, caps.max_io_size);
+	} catch (...) {
 		try {
 			close_session(id);
 		} catch (...) {
 		}
-		throw std::system_error(duplicate_error, std::generic_category(),
-					"duplicate KFI session descriptor");
+		throw;
 	}
-	return Session(duplicated_fd, id);
 }
 
 void Client::close_session(std::uint64_t session_id) const
@@ -251,15 +319,19 @@ std::size_t Client::read_memory(std::uint64_t session_id,
 				std::uint64_t remote_address, void *buffer,
 				std::size_t size) const
 {
-	return transfer_memory(fd_, session_id, remote_address, buffer, size, false);
+	const auto caps = capabilities();
+	return transfer_memory(fd_, session_id, remote_address, buffer, size,
+			       caps.max_io_size, false);
 }
 
 std::size_t Client::write_memory(std::uint64_t session_id,
 				 std::uint64_t remote_address, const void *buffer,
 				 std::size_t size) const
 {
+	const auto caps = capabilities();
 	return transfer_memory(fd_, session_id, remote_address,
-				       const_cast<void *>(buffer), size, true);
+			       const_cast<void *>(buffer), size,
+			       caps.max_io_size, true);
 }
 
 void Client::hide_module() const

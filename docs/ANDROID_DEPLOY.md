@@ -54,8 +54,7 @@ make -C "$KERNEL_OUT" M="$PWD/kernel" ARCH=arm64 LLVM=1 \
   KFI_TRANSPORT_CHAR=y KFI_TRANSPORT_PROC_PRIVATE=y modules
 ```
 
-The endpoint is a mode-0600 procfs node whose generated top-level directory
-is hidden from procfs listings. Pass the generated JSON's
+The endpoint is a normal mode-0600 procfs node. Pass the generated JSON's
 `endpoint` value explicitly or through `KFI_ENDPOINT`:
 
 ```sh

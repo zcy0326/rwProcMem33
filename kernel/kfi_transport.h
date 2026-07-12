@@ -27,11 +27,11 @@ __poll_t kfi_transport_poll(struct file *file, poll_table *wait);
 int kfi_transport_init_all(void);
 void kfi_transport_exit_all(void);
 u64 kfi_transport_capabilities(void);
-u64 kfi_transport_proc_capabilities(void);
 
 int kfi_transport_char_init(void);
 void kfi_transport_char_exit(void);
 int kfi_transport_proc_init(void);
 void kfi_transport_proc_exit(void);
+u64 kfi_transport_proc_capabilities(void);
 
 #endif

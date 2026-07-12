@@ -14,11 +14,24 @@ namespace {
 std::int32_t parse_pid(std::string_view text)
 {
 	std::int32_t pid = 0;
-	const auto result = std::from_chars(text.data(), text.data() + text.size(), pid);
-	if (result.ec != std::errc{} || result.ptr != text.data() + text.size() ||
-	    pid <= 0)
+	const auto result =
+		std::from_chars(text.data(), text.data() + text.size(), pid);
+	if (result.ec != std::errc{} ||
+	    result.ptr != text.data() + text.size() || pid <= 0)
 		throw std::invalid_argument("invalid PID");
 	return pid;
+}
+
+std::string protections(std::uint32_t prot)
+{
+	std::string value = "---";
+	if (prot & KFI_PROT_READ)
+		value[0] = 'r';
+	if (prot & KFI_PROT_WRITE)
+		value[1] = 'w';
+	if (prot & KFI_PROT_EXEC)
+		value[2] = 'x';
+	return value;
 }
 
 void usage(const char *program)
@@ -26,7 +39,8 @@ void usage(const char *program)
 	std::cerr
 		<< "usage: " << program
 		<< " [--endpoint auto|dev:/path|proc:/proc/path] "
-		   "<endpoint-info|version|caps|runtime|attach PID|hide-module>\n";
+		   "<endpoint-info|version|caps|runtime|attach PID|"
+		   "threads PID|maps PID|hide-module>\n";
 }
 
 } // namespace
@@ -54,7 +68,8 @@ int main(int argc, char **argv)
 		const int arguments = argc - command_index - 1;
 		if (command == "endpoint-info" && arguments == 0) {
 			const auto resolved = endpoint.resolve();
-			std::cout << "kind=" << kfi::endpoint_kind_name(resolved.kind)
+			std::cout << "kind="
+				  << kfi::endpoint_kind_name(resolved.kind)
 				  << " path=" << resolved.path
 				  << " source=" << resolved.source << '\n';
 			return 0;
@@ -64,17 +79,19 @@ int main(int argc, char **argv)
 
 		if (command == "version" && arguments == 0) {
 			const auto version = client.version();
-			std::cout << "KFI ABI " << version.major << '.' << version.minor
-				  << '.' << version.patch << " client=" << version.client_id
-				  << '\n';
+			std::cout << "KFI ABI " << version.major << '.'
+				  << version.minor << '.' << version.patch
+				  << " client=" << version.client_id << '\n';
 			return 0;
 		}
 
 		if (command == "caps" && arguments == 0) {
 			const auto caps = client.capabilities();
-			std::cout << "flags=0x" << std::hex << caps.flags << std::dec
+			std::cout << "flags=0x" << std::hex << caps.flags
+				  << std::dec
 				  << " max_sessions=" << caps.max_sessions
-				  << " max_io_size=" << caps.max_io_size << '\n';
+				  << " max_io_size=" << caps.max_io_size
+				  << '\n';
 			return 0;
 		}
 
@@ -84,8 +101,9 @@ int main(int argc, char **argv)
 				  << " machine=" << info.machine
 				  << " page_size=" << info.page_size
 				  << " page_shift=" << info.page_shift
-				  << " build_flags=0x" << std::hex << info.build_flags
-				  << std::dec << " profile=" << info.profile << '\n';
+				  << " build_flags=0x" << std::hex
+				  << info.build_flags << std::dec
+				  << " profile=" << info.profile << '\n';
 			return 0;
 		}
 
@@ -93,6 +111,47 @@ int main(int argc, char **argv)
 			const auto session = client.open_process_session(
 				parse_pid(argv[command_index + 1]));
 			std::cout << "session=" << session.id() << '\n';
+			return 0;
+		}
+
+		if (command == "threads" && arguments == 1) {
+			const auto session = client.open_process_session(
+				parse_pid(argv[command_index + 1]));
+			for (const auto &thread : session.threads()) {
+				std::cout << "tid=" << thread.tid
+					  << " tgid=" << thread.tgid
+					  << " state=0x" << std::hex
+					  << thread.state << std::dec
+					  << " leader="
+					  << ((thread.flags &
+					       KFI_THREAD_FLAG_LEADER) ?
+						      "yes" :
+						      "no")
+					  << " comm=" << thread.comm << '\n';
+			}
+			return 0;
+		}
+
+		if (command == "maps" && arguments == 1) {
+			const auto session = client.open_process_session(
+				parse_pid(argv[command_index + 1]));
+			for (const auto &map : session.maps()) {
+				std::cout << std::hex << std::setfill('0')
+					  << std::setw(16) << map.start << '-'
+					  << std::setw(16) << map.end << ' '
+					  << protections(map.prot) << ' '
+					  << std::setw(16) << map.offset << ' '
+					  << std::setw(2) << map.dev_major << ':'
+					  << std::setw(2) << map.dev_minor
+					  << std::dec << std::setfill(' ')
+					  << " inode=" << map.inode;
+				if (map.path[0])
+					std::cout << ' ' << map.path;
+				if (map.flags &
+				    KFI_MAP_FLAG_PATH_TRUNCATED)
+					std::cout << " [truncated]";
+				std::cout << '\n';
+			}
 			return 0;
 		}
 

@@ -42,16 +42,19 @@
 #define KFI_REQUEST_FLAGS_NONE 0U
 #define KFI_MEM_FLAG_NONE      0U
 #define KFI_VISIBILITY_FLAG_HIDE_MODULE (1U << 0)
+
 #define KFI_ENUM_RESULT_END (1U << 0)
 #define KFI_ENUM_MAX_ENTRIES 256U
+#define KFI_THREAD_FLAG_LEADER (1U << 0)
+
 #define KFI_PROT_READ  (1U << 0)
 #define KFI_PROT_WRITE (1U << 1)
 #define KFI_PROT_EXEC  (1U << 2)
+
 #define KFI_MAP_FLAG_SHARED         (1U << 0)
 #define KFI_MAP_FLAG_PRIVATE        (1U << 1)
 #define KFI_MAP_FLAG_FILE           (1U << 2)
 #define KFI_MAP_FLAG_PATH_TRUNCATED (1U << 3)
-
 
 struct kfi_request_header {
 	__u32 struct_size;

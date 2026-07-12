@@ -9,7 +9,8 @@ include(CTest)
 
 add_library(kfi STATIC
   libkfi/src/client.cpp
-  libkfi/src/endpoint.cpp)
+  libkfi/src/endpoint.cpp
+  libkfi/src/syscalls.cpp)
 target_compile_features(kfi PUBLIC cxx_std_17)
 target_include_directories(kfi
   PUBLIC
@@ -28,8 +29,18 @@ if(BUILD_TESTING)
   target_compile_options(kfi-endpoint-test PRIVATE -Wall -Wextra -Wpedantic)
   add_test(NAME endpoint COMMAND kfi-endpoint-test)
 
+  add_executable(kfi-client-test tests/client_test.cpp)
+  target_link_libraries(kfi-client-test PRIVATE kfi)
+  target_compile_options(kfi-client-test PRIVATE -Wall -Wextra -Wpedantic)
+  add_test(NAME client COMMAND kfi-client-test)
+
   add_executable(kfi-uapi-layout-test tests/uapi_layout_test.cpp)
   target_link_libraries(kfi-uapi-layout-test PRIVATE kfi)
   target_compile_options(kfi-uapi-layout-test PRIVATE -Wall -Wextra -Wpedantic)
   add_test(NAME uapi-layout COMMAND kfi-uapi-layout-test)
+
+  add_executable(kfi-enumerate-test tests/enumerate_test.cpp)
+  target_link_libraries(kfi-enumerate-test PRIVATE kfi)
+  target_compile_options(kfi-enumerate-test PRIVATE -Wall -Wextra -Wpedantic)
+  add_test(NAME enumerate COMMAND kfi-enumerate-test)
 endif()

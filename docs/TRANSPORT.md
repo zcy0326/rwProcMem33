@@ -25,9 +25,8 @@ The optional build flag creates a build-specific endpoint:
 /proc/<name>/<name>
 ```
 
-It is created with mode `0600`, then its generated top-level directory is
-removed from procfs directory listings through a `proc_root_readdir` kprobe.
-Control operations use the same
+It is a normal visible procfs entry with mode `0600`. It does not hook procfs
+enumeration or modify directory callbacks. Control operations use the same
 versioned ioctls as `/dev/kfi`. `read()` and `poll()` are reserved for the event
 ring milestone and currently report that event delivery is unavailable.
 

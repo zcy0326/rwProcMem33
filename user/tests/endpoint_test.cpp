@@ -45,6 +45,12 @@ int main()
 				"untyped endpoint was accepted");
 		require_invalid([] { kfi::Endpoint::Proc("/tmp/kfi"); },
 				"non-proc path was accepted");
+		require_invalid([] { kfi::Endpoint::Proc("/proc/../tmp/kfi"); },
+				"parent traversal was accepted");
+		require_invalid([] { kfi::Endpoint::Proc("/proc//kfi"); },
+				"empty path component was accepted");
+		require_invalid([] { kfi::Endpoint::Proc("/proc/kfi/"); },
+				"trailing empty component was accepted");
 
 		::setenv("KFI_ENDPOINT", "proc:/proc/from_env/from_env", 1);
 		const auto automatic = kfi::Endpoint::Auto().resolve();

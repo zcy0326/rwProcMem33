@@ -3,9 +3,8 @@
 #define KFI_COMPAT_H
 
 #include <linux/device.h>
+#include <linux/mm_types.h>
 
-struct mm_struct;
-struct vm_area_struct;
 typedef int (*kfi_vma_visitor_t)(struct vm_area_struct *vma, void *context);
 
 struct class *kfi_compat_class_create(const char *name);

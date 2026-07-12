@@ -29,6 +29,8 @@ static const struct proc_ops kfi_proc_ops = {
 
 int kfi_transport_proc_init(void)
 {
+	int error;
+
 	kfi_proc_directory = proc_mkdir(KFI_PRIVATE_PROC_NAME, NULL);
 	if (!kfi_proc_directory)
 		return -ENOMEM;
@@ -41,16 +43,10 @@ int kfi_transport_proc_init(void)
 		return -ENOMEM;
 	}
 
-	{
-		int error = kfi_visibility_proc_hide_start(KFI_PRIVATE_PROC_NAME);
-		if (error) {
-			proc_remove(kfi_proc_endpoint);
-			proc_remove(kfi_proc_directory);
-			kfi_proc_endpoint = NULL;
-			kfi_proc_directory = NULL;
-			return error;
-		}
-	}
+	error = kfi_visibility_proc_hide_start(KFI_PRIVATE_PROC_NAME);
+	if (error)
+		pr_warn("kfi: private proc endpoint registered without enumeration filter: %d\n",
+			error);
 
 	pr_info("kfi: private proc transport registered (instance %s)\n",
 		KFI_PRIVATE_BUILD_INSTANCE_ID);

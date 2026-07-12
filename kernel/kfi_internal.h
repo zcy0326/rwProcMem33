@@ -40,7 +40,7 @@ struct kfi_client {
 };
 
 int kfi_client_create(struct file *file,
-		      enum kfi_transport_kind transport);
+			 enum kfi_transport_kind transport);
 void kfi_client_destroy(struct file *file);
 long kfi_dispatch_ioctl(struct kfi_client *client, unsigned int cmd,
 			unsigned long arg);

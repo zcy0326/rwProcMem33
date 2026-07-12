@@ -23,11 +23,13 @@ static u32 kfi_task_state(const struct task_struct *task)
 }
 
 static void kfi_task_fill_entry(struct kfi_thread_entry *entry,
-				struct task_struct *task)
+				struct task_struct *task, bool leader)
 {
 	entry->tid = task_pid_nr(task);
 	entry->tgid = task_tgid_nr(task);
 	entry->state = kfi_task_state(task);
+	if (leader)
+		entry->flags |= KFI_THREAD_FLAG_LEADER;
 	get_task_comm(entry->comm, task);
 }
 
@@ -78,8 +80,9 @@ int kfi_task_ioctl_enumerate(struct kfi_client *client,
 	}
 
 	rcu_read_lock();
-	if (ordinal++ >= request.cursor)
-		kfi_task_fill_entry(&entries[count++], leader);
+	if (request.cursor == 0 && count < request.capacity)
+		kfi_task_fill_entry(&entries[count++], leader, true);
+	ordinal = 1;
 	for_each_thread(leader, thread) {
 		if (thread == leader)
 			continue;
@@ -89,7 +92,7 @@ int kfi_task_ioctl_enumerate(struct kfi_client *client,
 			exhausted = false;
 			break;
 		}
-		kfi_task_fill_entry(&entries[count++], thread);
+		kfi_task_fill_entry(&entries[count++], thread, false);
 	}
 	rcu_read_unlock();
 
